@@ -7,27 +7,59 @@ Created on Wed Aug  5 09:43:45 2020
 import numpy as np
 import pandas as pd
 import tables as tb
+import progressbar
 import matplotlib.pyplot as plt
-import datetime
-import matplotlib.dates as mdates
-import scipy.interpolate
+from scipy.interpolate import interp1d
 
-#%% Constants
-R          = 8.314                          # gas constant used to calculate Arrhenius's term
-S_PER_YEAR = 31557600.0                     # number of seconds in a year
-spy = S_PER_YEAR
-RHO_1      = 550.0                          # cut off density for the first zone densification (kg/m^3)
-RHO_2      = 815.0                          # cut off density for the second zone densification (kg/m^3)
-RHO_I      = 917.0                          # density of ice (kg/m^3)
-RHO_I_MGM  = 0.917                          # density of ice (g/m^3)
-RHO_1_MGM  = 0.550                          # cut off density for the first zone densification (g/m^3)
-GRAVITY    = 9.8                            # acceleration due to gravity on Earth
-K_TO_C     = 273.15                         # conversion from Kelvin to Celsius
-BDOT_TO_A  = S_PER_YEAR * RHO_I_MGM         # conversion for accumulation rate
-RHO_W_KGM  = 1000.                          # density of water
-P_0 = 1.01325e5
-epoch =np.datetime64('1970-01-01')
 
+def interpolate_temperature(dates, depth_cor, temp,depth=10, min_diff_to_depth = 2,
+                            kind = 'quadratic', title='', plot=True):
+    df_interp = pd.DataFrame()
+    df_interp['date'] = dates
+    df_interp['temperatureObserved'] = np.nan
+
+    # preprocessing temperatures for small gaps
+    tmp = pd.DataFrame(temp)
+    tmp['time'] = dates.values
+    tmp = tmp.set_index('time')
+    tmp = tmp.resample('H').mean()
+    # tmp = tmp.interpolate(limit=24*7)
+    temp = tmp.loc[dates].values
+    
+    for i in progressbar.progressbar(range(len(dates))):
+        x = depth_cor[i,:].astype(float)
+        y = temp[i,:].astype(float)
+        ind_no_nan = ~np.isnan(x+y)
+        x = x[ind_no_nan]
+        y = y[ind_no_nan]
+        x, indices = np.unique(x, return_index=True)
+        y = y[indices]
+        if len(x) <2 or np.min(np.abs(x-depth))>min_diff_to_depth:
+            continue
+        f = interp1d(x,y,kind, fill_value='extrapolate')
+        df_interp.iloc[i,1] = np.min(f(depth),0)
+    
+    if df_interp.iloc[:5,1].std() > 0.1:
+        df_interp.iloc[:5,1] = np.nan
+    df_interp['temperatureObserved']  = df_interp['temperatureObserved'].interpolate(limit=24*7).values
+    if plot:
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        for i in range(np.shape(depth_cor)[1]):
+            ax1.plot(dates, -depth_cor[:,i])
+        ax1.axhline(0,color='gray',linestyle='--')
+        ax1.axhline(-10,color='red')
+        ax1.set_ylim(-12,1)
+        ax1.set_ylabel('Depth (m)')
+        ax1.set_xlabel('Time')
+        
+        for i in range(np.shape(depth_cor)[1]):
+            ax2.plot(dates, temp[:,i])
+        ax2.plot(dates, df_interp['temperatureObserved'], linewidth=5)
+        ax2.set_ylabel('Firn temperature (degC)')
+        ax2.set_xlabel('Time')
+        fig.suptitle(title) # or plt.suptitle('Main title')
+    return df_interp
+    
 #%% Loading metadata, RTD and sonic ranger
 def load_metadata(filepath,sites):
     CVNfile=tb.open_file(filepath, mode='r', driver="H5FD_CORE")
@@ -50,10 +82,8 @@ def load_metadata(filepath,sites):
     statmeta_df.loc['NASA-SE','rtd_date']=statmeta_df.loc['NASA-SE','install_date']-pd.Timedelta(days=1)
     
     # Meteorological_Daily to pandas
-    print('loading Meteorological_Daily to metdata_df')
     metdata_df=pd.DataFrame.from_records(datatable.Meteorological_Daily[:])
     metdata_df.sitename=metdata_df.sitename.str.decode("utf-8")
-    # pd.to_datetime(compaction_df.daynumber_YYYYMMDD.values,format='%Y%m%d')
     metdata_df['date']=pd.to_datetime(metdata_df.daynumber_YYYYMMDD.values,format='%Y%m%d')
     
     for site in sites:
@@ -138,14 +168,7 @@ def load_metadata(filepath,sites):
         rtd_depth_df.loc[site]=vv
     rtd_d = sonic_df.join(rtd_depth_df, how='inner')
     rtd_dc = rtd_d.copy()
-    # plt.figure()
-    # plt.pcolormesh(rtd_dc.loc[site, zz2].values.T)
-
     rtd_dep = rtd_dc[zz2].add(-rtd_dc['delta'],axis='rows')
-    # plt.figure()
-    # plt.pcolormesh(rtd_dep.loc[site, zz2].values.T)
-
-    # import pdb; pdb.set_trace()
     
     rtd_df=pd.DataFrame.from_records(datatable.Firn_Temp_Daily[:].tolist(),  columns=datatable.Firn_Temp_Daily.colnames)
     rtd_df.sitename=rtd_df.sitename.str.decode("utf-8")
