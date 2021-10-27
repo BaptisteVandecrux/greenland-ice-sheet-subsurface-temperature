@@ -15,6 +15,9 @@ import progressbar
 import matplotlib.pyplot as plt
 import firn_temp_lib as ftl
 import time 
+import os
+import xarray as xr
+import time
 def interp_pandas(s, kind ="quadratic"):
     # A mask indicating where `s` is not null
     m = s.notna().values
@@ -27,10 +30,10 @@ def interp_pandas(s, kind ="quadratic"):
     # Apply this to the indices of the nulls; reconstruct a series
     s[~m] = f(s[~m].index)[0]
     
-    plt.figure()
-    s.plot(marker='o',linestyle='none')
-    s_save.plot(marker='o',linestyle='none')
-    plt.xlim(0, 60)
+    # plt.figure()
+    # s.plot(marker='o',linestyle='none')
+    # s_save.plot(marker='o',linestyle='none')
+    # plt.xlim(0, 60)
     return s
 
 
@@ -83,7 +86,6 @@ df_all = df_all.append(df_Pol[['date','site', 'latitude', 'longitude', 'elevatio
 
 # %% Ken's dataset  
 print('Loading Kens dataset')
-import os
 min_depth_1 = 20
 min_depth_2 = 50
 folders = [x[0] for x in os.walk('Data/greenland_ice_borehole_temperature_profiles-main')][1:]
@@ -184,7 +186,8 @@ for k, site in enumerate(['FA_13','FA_15_1','FA_15_2']):
     depth_cor = pd.DataFrame()
     depth_cor  = depth.values.reshape((1, -1)).repeat(len(dates),axis=0) + accum_depth.reshape((-1, 1)).repeat(len(depth.values),axis=1)
     
-    df_10 = ftl.interpolate_temperature(dates, depth_cor, temp.values)
+    df_10 = ftl.interpolate_temperature(dates, depth_cor, temp.values,
+                                 title=site)
     df_10.loc[np.greater(df_10['temperatureObserved'],0), 'temperatureObserved']=0
     df_10 = df_10.set_index('date',drop=False).resample('M').first()
     df_10['site'] = site
@@ -285,14 +288,16 @@ df_harper['date'].iloc[num_row:] = pd.to_datetime('2016-01-01')
 df_harper['temperatureObserved'].iloc[:num_row] = df_harper['temperature_2015_celsius'].iloc[:num_row]
 df_harper['temperatureObserved'].iloc[num_row:] = df_harper['temperature_2016_celsius'].iloc[num_row:]
 df_harper['depth'] = df_harper.depth_m - df_harper.height_m
-df_harper=df_harper.loc[df_harper.depth<50]
+df_harper=df_harper.loc[df_harper.depth<100]
 df_harper=df_harper.drop(columns=['height_m', 'temperature_2015_celsius', 'temperature_2016_celsius','yearDrilled', 'dateDrilled', 'depth_m'])
 df_harper=df_harper.loc[df_harper.temperatureObserved.notnull()]
 
 for borehole in df_harper['borehole'].unique():
-    if df_harper.loc[df_harper['borehole'] == borehole].shape[0] == 1:
+    print(borehole,df_harper.loc[df_harper['borehole'] == borehole,'depth'].min())
+    if df_harper.loc[df_harper['borehole'] == borehole,'depth'].min() > 20:
         df_harper = df_harper.loc[df_harper['borehole'] != borehole]
         continue        
+    
     new_row = df_harper.loc[df_harper['borehole'] == borehole].iloc[0,:].copy()
     new_row['depth']=10
     new_row['temperatureObserved']=np.nan
@@ -300,9 +305,13 @@ for borehole in df_harper['borehole'].unique():
     
 df_harper = df_harper.set_index(['depth']).sort_index()
 
+# plt.figure()
 for borehole in df_harper['borehole'].unique():
     s = df_harper.loc[df_harper['borehole']==borehole,'temperatureObserved']
     s.iloc[0] =         interp1d(s.iloc[1:].index, s.iloc[1:], kind='linear',fill_value='extrapolate')(10)
+    # s.plot(marker='o',label='_no_legend_')
+    # df_harper.loc[df_harper['borehole']==borehole,'temperatureObserved'].plot(marker='o',label=borehole)
+    # plt.legend()
     df_harper.loc[df_harper['borehole']==borehole,'temperatureObserved'] = s.values
     df_harper.loc[df_harper['borehole']==borehole,'note'] = 'interpolated from ' +str(s.iloc[1:].index.values)+' m depth'
 
@@ -318,8 +327,7 @@ df_harper = df_harper.rename(columns={'borehole': 'site', 'latitude_WGS84':'lati
 df_all = df_all.append(df_harper[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference', 'reference_short', 'note']],ignore_index=True)
    
 # %%  GC-Net  
-import xarray as xr
-import time
+
 print('Loading GC-Net')
 time.sleep(0.2)
 
@@ -345,7 +353,8 @@ for ii, site in progressbar.progressbar(enumerate(sites)):
     
     df_10 = ftl.interpolate_temperature(df_d['date'],
                                  df_d[['depth_'+str(i) for i in range(1,11)]].values,
-                                 df_d[['rtd'+str(i) for i in range(1,11)]].values)
+                                 df_d[['rtd'+str(i) for i in range(1,11)]].values,
+                                 title=site)
     df_10['site'] = site
     df_10['latitude'] = lat[ii]
     df_10['longitude'] = lon[ii]
@@ -363,7 +372,7 @@ df_gcnet['depthOfTemperatureObservation'] = 10
 
 df_all = df_all.append(df_gcnet[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference',  'reference_short', 'note']],ignore_index=True)
 
-# %%  FirnCover  
+# %%  FirnCover 
 print('Loading FirnCover')
 time.sleep(0.2)
 
@@ -380,7 +389,8 @@ for site in sites:
     df_d = rtd_df.xs(site,level='sitename').reset_index()
     df_10 = ftl.interpolate_temperature(df_d['date'],
                                  df_d[['depth_'+str(i) for i in range(1,24)]].values,
-                                 df_d[['rtd'+str(i) for i in range(1,24)]].values)
+                                 df_d[['rtd'+str(i) for i in range(1,24)]].values,
+                                 title=site)
     df_10['site'] = site
     if site == 'Crawford':
         df_10['site'] = 'CP1'
@@ -415,15 +425,23 @@ for k, note in enumerate(['SPLAZ_main','SPLAZ_2','SPLAZ_3']):
         df2['depth_'+str(i-1)] = df.loc[df['level']==i,'depth'].values
     df2[df2==-999]=np.nan
     df2=df2.set_index(['date']).resample('D').mean()
-    # if k == 0:
-    #     df_save = df2
+    
     df_10 = ftl.interpolate_temperature(df2.index,
                     df2[['depth_'+str(i) for i in range(num_therm[k])]].values,
-                    df2[['rtd'+str(i) for i in range(num_therm[k])]].values)
+                    df2[['rtd'+str(i) for i in range(num_therm[k])]].values,
+                    min_diff_to_depth = 1.5, kind = 'linear',
+                                 title=note)
+    # for i in range(10):
+    #     plt.figure()
+    #     plt.plot(df2.iloc[i*20,0:12].values,-df2.iloc[i*20,12:].values)
+    #     plt.plot(df_10.iloc[i*20,1],-10,marker='o')
+    #     plt.title(df2.index[i*20])
+    #     plt.xlim(-15,0)
+        
     df_10['note'] = note
     df_10['latitude'] = 67.000252 
     df_10['longitude'] = -47.022999
-    df_10['elevation'] = 2119
+    df_10['elevation'] = 1840
     df_10 = df_10.set_index('date').resample('M').first().reset_index()
     df_splaz = df_splaz.append(df_10)
 df_splaz['reference'] = 'Charalampidis, C., Van As, D., Colgan, W.T., Fausto, R.S., Macferrin, M. and Machguth, H., 2016. Thermal tracing of retained meltwater in the lower accumulation area of the Southwestern Greenland ice sheet. Annals of Glaciology, 57(72), pp.1-10.'
@@ -440,50 +458,64 @@ df_humphrey = pd.DataFrame(columns=['site','latitude','longitude',
                                'elevation','date','T10m'])
 for site in df.site:
     try:
-        df_site = pd.read_csv('Data/Humphrey string/'+site+".txt", header = None, delim_whitespace=True)
+        df_site = pd.read_csv('Data/Humphrey string/'+site+".txt", header = None, delim_whitespace=True, names = ['doy']+['IceTemperature'+str(i)+'(C)' for i in range(1,33)])
     except: # Exception as e:
         # print(e)
         continue
-    
+    print(site)
+    temp_label = df_site.columns[1:]
     # the first column is a time stamp and is the decimal days after the first second of January 1, 2007. 
     df_site['time'] = [datetime(2007,1,1) + timedelta(days=d) for d in df_site.iloc[:,0]]
     if site == 'T1old':
         df_site['time'] = [datetime(2006,1,1) + timedelta(days=d) for d in df_site.iloc[:,0]]
-    df_site['time'].max()
     df_site = df_site.loc[df_site['time']<=df_site['time'].values[-1],:]
     df_site = df_site.set_index('time')
+    df_site = df_site.resample('H').mean()
+  
+    depth = [0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00, 3.25, 3.50, 3.75, 4.00, 4.25, 4.50, 4.75, 5.00, 5.25, 5.00, 5.50, 6.00, 6.50, 7.00, 7.50, 8.00, 8.50, 9.00, 9.50, 10.0]
     
-    # depth = 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00 2.25 2.50 2.75 3.00 3.25 3.50 3.75 4.00 4.25 4.50 4.75 5.00 5.25 5.00 5.50 6.00 6.50 7.00 7.50 8.00 8.50 9.00 9.50 10.0
-    df_site['T10m'] = df_site.iloc[:,-1]
-    # removing the first month to leave thermistor to equilibriate
-    df_site = df_site.iloc[24*2*30:,:]
-    
-    # some filtering
+    if site != 'H5':
+        df_site = df_site.iloc[24*30:,:]
     if site == 'T4':
-        df_site = df_site.loc[df_site['T10m'] >-16,:]
-    df_m = df_site.T10m.to_frame().resample('H').mean().resample('M').mean()
-
-    # plt.figure()
-    # for i in range(1,5):
-        # df_site.iloc[:,-i].plot()
-    # df_site.T10m.plot()
-    # df_m.T10m.plot(drawstyle="steps-pre")
-    # df_site.T10m.to_frame().resample('H').mean().plot()
-    # plt.title(site)
-
-    df_m ['site'] = site
-    df_m ['date'] = df_m.index.get_level_values(0)
-    df_m['latitude'] = df.loc[df.site == site,'latitude'].values[0]
-    df_m ['longitude']=df.loc[df.site == site,'longitude'].values[0]
-    df_m ['elevation']=df.loc[df.site == site,'elevation'].values[0]
+        df_site = df_site.loc[:'2007-12-05']    
+    if site == 'H2':
+        depth = np.array(depth)-1
+    if site == 'H4':
+        depth = np.array(depth)-0.75
+    if site in ['H3', 'G165', 'T1new']:
+        depth = np.array(depth)-0.50
     
-    df_humphrey = df_humphrey.append(df_m)
+    df_hs = pd.read_csv('Data/Humphrey string/'+site+"_surface_height.csv")
+    df_hs.time = pd.to_datetime(df_hs.time)
+    df_hs = df_hs.set_index('time')
+    df_hs = df_hs.resample('H').mean()
+    df_site['surface_height'] = np.nan
+    
+    df_site['surface_height'] = df_hs.iloc[[df_hs.index.get_loc(index, method='nearest') for index in df_site.index]].values 
+
+    depth_label = ['depth_'+str(i) for i in range(1,len(temp_label)+1)]
+    for i in range(len(temp_label)):
+        df_site[depth_label[i]] = depth[i] + df_site['surface_height'].values - df_site['surface_height'].iloc[0]
+        if site != 'H5':
+            df_site[temp_label[i]] = df_site[temp_label[i]].rolling(24*3, center=True).mean().values
+    
+    df_10 = ftl.interpolate_temperature(df_site.index,
+                                     df_site[depth_label].values,
+                                     df_site[temp_label].values,
+                                     title=site)
+        
+    df_10 ['site'] = site
+    df_10['latitude'] = df.loc[df.site == site,'latitude'].values[0]
+    df_10 ['longitude']=df.loc[df.site == site,'longitude'].values[0]
+    df_10 ['elevation']=df.loc[df.site == site,'elevation'].values[0]
+    
+    df_humphrey = df_humphrey.append(df_10)
 df_humphrey = df_humphrey.reset_index(drop=True)
-df_humphrey = df_humphrey.rename(columns={'index': 'date', 'T10m':'temperatureObserved'})
+df_humphrey=df_humphrey.loc[df_humphrey.temperatureObserved.notnull()]
 df_humphrey['depthOfTemperatureObservation']=10
 df_humphrey['reference'] = 'Humphrey, N. F., Harper, J. T., and Pfeffer, W. T. (2012), Thermal tracking of meltwater retention in Greenlands accumulation area, J. Geophys. Res., 117, F01010, doi:10.1029/2011JF002083. Data available at: https://instaar.colorado.edu/research/publications/occasional-papers/firn-stratigraphy-and-temperature-to-10-m-depth-in-the-percolation-zone-of/'
 df_humphrey['reference_short'] = 'Humphrey et al. (2012)'
-df_humphrey['note'] = 'no surface height measurements, using lowest (10m) sensor'
+df_humphrey['note'] = 'no surface height measurements, using interpolating surface height using CP1 and SwissCamp stations'
 
 df_all = df_all.append(df_humphrey[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference',  'reference_short', 'note']],ignore_index=True)
 
@@ -524,7 +556,11 @@ for site in df_meta.site:
     df['depthOfTemperatureObservation']= 10
     df['temperatureObserved']= df['Depth_10.000'].values
     df = df.set_index('date').resample('M').first().reset_index()
+    if site in ['T-11a', 'T-11b', 'T-14']:
+        df = df.iloc[1:,:]
+
     df_hills=df_hills.append(df)
+
 df_hills['note'] = 'interpolated at 10 m'
 df_hills['reference'] = 'Hills, B. H., Harper, J. T., Meierbachtol, T. W., Johnson, J. V., Humphrey, N. F., and Wright, P. J.: Processes influencing heat transfer in the near-surface ice of Greenlands ablation zone, The Cryosphere, 12, 3215–3227, https://doi.org/10.5194/tc-12-3215-2018, 2018. data: https://doi.org/10.18739/A2QV3C418'
 
@@ -552,7 +588,8 @@ for i in range(1,9):
 
 df_achim = ftl.interpolate_temperature(df_d['date'],
                              df_d[['depth_'+str(i) for i in range(1,9)]].values,
-                             df_d[['rtd'+str(i) for i in range(1,9)]].values)
+                             df_d[['rtd'+str(i) for i in range(1,9)]].values,
+                                 title='Dye-2 Achim')
 df_achim['site'] = 'DYE-2'
 df_achim['latitude'] = 66.4800
 df_achim['longitude'] = -46.2789
@@ -592,7 +629,8 @@ for i in range(len(temp_label)):
 
 df_10 = ftl.interpolate_temperature(df.index,
                                  df[depth_label].values,
-                                 df[temp_label].values)
+                                 df[temp_label].values,
+                                 title='Camp Century Climate')
 df_10.loc[np.greater(df_10['temperatureObserved'],-15), 'temperatureObserved']=np.nan
 df_10 = df_10.set_index('date',drop=False).resample('M').first()
 df_10['site'] = 'CEN'
@@ -632,7 +670,8 @@ for i in range(len(temp_label)):
 
 df_10 = ftl.interpolate_temperature(df.index,
                                  df[depth_label].values,
-                                 df[temp_label].values)
+                                 df[temp_label].values,
+                                 title='Camp Century Climate')
 df_10.loc[np.greater(df_10['temperatureObserved'],-15), 'temperatureObserved']=np.nan
 df_10 = df_10.set_index('date',drop=False).resample('M').first()
 df_10['site'] = 'CEN'
@@ -766,6 +805,44 @@ df_wegener=df_wegener.append(df_new)
 df_wegener['reference_short'] = 'Wegener (1930)'
 df_wegener['note'] = ''
 df_all = df_all.append(df_wegener[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference', 'reference_short', 'note']],ignore_index=True)
+
+# %% Japanese stations
+df = pd.read_excel('Data/Japan/Qanaaq.xlsx')
+df.date = pd.to_datetime(df.date)
+df['note'] = 'interpolated to 10 m'
+df_all = df_all.append(df[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference','reference_short', 'note']], ignore_index=True)
+
+df = pd.read_excel('Data/Japan/Sigma.xlsx')
+df['note'] = 'interpolated to 10 m'
+df_all = df_all.append(df[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference','reference_short', 'note']], ignore_index=True)
+
+# %% Ambach
+
+meta = pd.read_csv('Data/Ambach1979b/metadata.txt',sep='\t', header = None,names = ['site', 'file', 'date', 'latitude','longitude','elevation'])
+meta.date=pd.to_datetime(meta.date)
+for file in meta.file:
+    df = pd.read_csv('Data/Ambach1979b/'+file+'.txt',header=None, names=['temperature','depth'])
+    if df.depth.max()<7.5:
+        meta.loc[meta.file== file,'temperatureObserved'] = df.temperature.iloc[-1]
+        meta.loc[meta.file== file,'depthOfTemperatureObservation'] = df.index.values[-1]
+    else:
+        df.loc[df.shape[0]] = [np.nan, 10]  # adding a row
+        df = df.set_index('depth')
+        df = interp_pandas(df)
+        plt.figure()
+        df.plot()
+        plt.title(file)
+        meta.loc[meta.file== file,'temperatureObserved'] = df.temperature.iloc[-1]
+        meta.loc[meta.file== file,'depthOfTemperatureObservation'] = df.index.values[-1]
+                 
+meta['reference'] = 'Ambach, W., Zum Wärmehaushalt des Grönländischen Inlandeises: Vergleichende Studie im Akkumulations- und Ablationsgebiet,  Polarforschung 49 (1): 44-54, 1979'
+meta['reference_short'] = 'Ambach EGIG 1959'
+meta['note'] = ''
+df_all = df_all.append(meta[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference','reference_short', 'note']], ignore_index=True)
+
+# %% 
+# 'Clausen HB and Stauffer B (1988) Analyses of Two Ice Cores Drilled at the Ice-Sheet Margin in West Greenland. Annals of Glaciology 10, 23–27 (doi:10.3189/S0260305500004109) and Stauffer, B, Oeschger, H 1979 Temperaturprofile in Bohrlöchern am Rande des grönländischen Inlandeises. Mitteilungen der Versuchsanstalt für Wasserbau, Hydrologie und Glaziologie an der Eidgenössischen Technischen Hochschule (Zürich) 41: 301—313'
+
 # %% Checking values
 # df_ambiguous_date = df_all.loc[pd.to_datetime(df_all.date,errors='coerce').isnull(),:]
 

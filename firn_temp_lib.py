@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 
 
-def interpolate_temperature(dates, depth_cor, temp,depth=10, min_diff_to_depth = 2,
+def interpolate_temperature(dates, depth_cor, temp,depth=10, min_diff_to_depth = 1.5,
                             kind = 'quadratic', title='', plot=True):
     df_interp = pd.DataFrame()
     df_interp['date'] = dates
@@ -41,7 +41,7 @@ def interpolate_temperature(dates, depth_cor, temp,depth=10, min_diff_to_depth =
     
     if df_interp.iloc[:5,1].std() > 0.1:
         df_interp.iloc[:5,1] = np.nan
-    df_interp['temperatureObserved']  = df_interp['temperatureObserved'].interpolate(limit=24*7).values
+    # df_interp['temperatureObserved']  = df_interp['temperatureObserved'].interpolate(limit=24*7).values
     if plot:
         fig, (ax1, ax2) = plt.subplots(1, 2)
         for i in range(np.shape(depth_cor)[1]):
@@ -54,12 +54,31 @@ def interpolate_temperature(dates, depth_cor, temp,depth=10, min_diff_to_depth =
         
         for i in range(np.shape(depth_cor)[1]):
             ax2.plot(dates, temp[:,i])
-        ax2.plot(dates, df_interp['temperatureObserved'], linewidth=5)
+            ax2.plot(dates[depth_cor[:,i]<0], temp[depth_cor[:,i]<0,i],color='black', marker='o',linestyle=None)
+        ax2.plot(dates, df_interp['temperatureObserved'],  marker='o', linestyle=None)
         ax2.set_ylabel('Firn temperature (degC)')
         ax2.set_xlabel('Time')
         fig.suptitle(title) # or plt.suptitle('Main title')
     return df_interp
+
+# %% 
+def interp_pandas(s, kind ="quadratic"):
+    # A mask indicating where `s` is not null
+    m = s.notna().values
+    s_save=s.copy()
+    # Construct an interpolator from the non-null values
+    # NB 'kind' instead of 'method'!
+    kw = dict(kind=kind, fill_value="extrapolate")
+    f = interp1d(s[m].index, s.loc[m].values.reshape(1,-1)[0], **kw) 
     
+    # Apply this to the indices of the nulls; reconstruct a series
+    s[~m] = f(s[~m].index)[0]
+    
+    plt.figure()
+    s.plot(marker='o',linestyle='none')
+    s_save.plot(marker='o',linestyle='none')
+    plt.xlim(0, 60)
+    return s
 #%% Loading metadata, RTD and sonic ranger
 def load_metadata(filepath,sites):
     CVNfile=tb.open_file(filepath, mode='r', driver="H5FD_CORE")

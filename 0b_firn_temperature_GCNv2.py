@@ -8,13 +8,13 @@ tip list:
     import pdb; pdb.set_trace()
 """
 import matplotlib.dates as mdates
-
+from datetime import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import sys
 import firn_temp_lib as ftl
-
+from sklearn.linear_model import LinearRegression
 # %% Old GC-Net stations not processed in Vandecrux et al. 2020
 meta = pd.read_csv('Data/GC-Net/Gc-net_documentation_Nov_10_2000.csv')
 df_gcn = pd.DataFrame()
@@ -50,11 +50,7 @@ for site_id in [1, 4, 5, 9, 13, 14, 22]: #, 23]:
     if site == 'SwissCamp':
         ind_last = pd.to_datetime('2011-01-01')
     df = df.loc[ind_first:ind_last,:]
-    # plt.figure()
-    # for col in temp_cols:
-    #     df[col].plot()
-    # plt.title(site)
-    
+
     df_save = df.copy()
     
     if site == 'NGRIP':
@@ -71,44 +67,60 @@ for site_id in [1, 4, 5, 9, 13, 14, 22]: #, 23]:
         df.loc['2012-01-01':,'HS2'] = df.loc['2012-01-01':,'HS2'].values+3
         df.loc['2016-05-01':,'HS1'] = df.loc['2016-05-01':,'HS1'].values-3    
         df.loc['2016-05-01':,'HS2'] = df.loc['2016-05-01':,'HS2'].values-3
-    if site == 'GITS':
-        df.loc['1999-01-01':,'HS1'] = df.loc['1999-01-01':,'HS1'].values+3   
-        df.loc['1999-01-01':,'HS2'] = df.loc['1999-01-01':,'HS2'].values+3 
-        df.loc['2001-01-01':,'HS1'] = df.loc['2001-01-01':,'HS1'].values+2   
-        df.loc['2001-01-01':,'HS2'] = df.loc['2001-01-01':,'HS2'].values+2 
+    # if site == 'GITS':
+    #     df.loc['1999-01-01':,'HS1'] = df.loc['1999-01-01':,'HS1'].values+3   
+    #     df.loc['1999-01-01':,'HS2'] = df.loc['1999-01-01':,'HS2'].values+3 
+    #     df.loc['2001-01-01':,'HS1'] = df.loc['2001-01-01':,'HS1'].values+2   
+    #     df.loc['2001-01-01':,'HS2'] = df.loc['2001-01-01':,'HS2'].values+2 
     if site == 'Humboldt':
         df.loc['2007-02-01':,'HS1'] = df.loc['2007-02-01':,'HS1'].values+1.4  
         df.loc['2007-02-01':,'HS2'] = df.loc['2007-02-01':,'HS2'].values+1.4
         df.loc['2003-04-01':'2003-05-01','HS1'] = np.nan   
         df.loc['2003-04-01':'2003-05-01','HS2'] = np.nan
-
-    # fig, ax = plt.subplots()    
-    # ax.xaxis.set_major_locator(mdates.MonthLocator(interval=12))
-    # ax.xaxis.set_minor_locator(mdates.MonthLocator())
-    # ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-
-    # df_save['HS1'].plot(ax =ax)
-    # df_save['HS2'].plot(ax =ax)
-    # plt.title(site)  
-    # df['HS1'].plot(ax =ax)
-    # df['HS2'].plot(ax =ax)
-    # df['HS_summary'].plot(ax =ax,linewidth=3)
-    # plt.title(site)
     
     df['HS_summary'] = df[['HS1', 'HS2']].mean(axis=1,skipna=True)
     if all(df['HS_summary'].isnull()):
         df['HS_summary']=0
+    df['HS_summary'] = df['HS_summary'] - df['HS_summary'][df['HS_summary'].first_valid_index()]
+    df['HS_summary'] = df['HS_summary'].interpolate()
     
+    fig, ax = plt.subplots()    
+    df_save['HS1'].plot(ax =ax)
+    df_save['HS2'].plot(ax =ax)
+    plt.title(site)  
+    df['HS1'].plot(ax =ax)
+    df['HS2'].plot(ax =ax)
+    df['HS_summary'].plot(ax =ax,linewidth=3)
+    plt.title(site)
     
     depth_cols = ['depth_'+str(i) for i in range(1,11)]
     depth_ini_val = [0.1, 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1]
     depth_ini_val=np.flip(depth_ini_val)
     
-    if site in ['PET-ELA', 'Humboldt']:
+    if site == 'PET-ELA':
         depth_ini_val=np.flip(depth_ini_val)
+    if site == 'Humboldt':
+        depth_ini_val = [0.1, 9.1, 8.1, 7.1, 6.1, 5.1, 4.1, 3.1, 2.1, 1.1]
         
+    if site == 'GITS':
+        df_gits = df
+        df = pd.read_csv('Data/GC-Net/data_GITS_combined_hour.txt', sep='\t',index_col=False)
+        df = df.loc[df.Year>1998,:]
+        df = df.loc[df.Year<2003,:]
+        df[df==-999]=np.nan
+        
+        df['HS_summary']  = df['SurfaceHeightm']
+
+        df['date'] = pd.to_datetime(df['time']-719529,unit='d').round('s')
+        df = df.set_index('date')
+        df = df.resample('M').mean()
+
+        temp_cols = ['IceTemperature'+str(i)+'C' for i in range(1,11)]
+
     for i, depth in enumerate(depth_cols):
-        df[depth] = depth_ini_val[i] +df['HS_summary'].interpolate() - df['HS_summary'].loc[df['HS_summary'].first_valid_index():]
+        df[depth] = depth_ini_val[i] +df['HS_summary']        
+
+
     df_10 = ftl.interpolate_temperature(df.index, df[depth_cols].values,
                                         df[temp_cols].values,
                                         kind='linear', title = site)
@@ -131,19 +143,21 @@ df_gcn2 = pd.DataFrame()
 
 for site in meta.site_short:
     print(site)
-    if site in ['JAR', 'CEN']:
+    if site in ['JAR', 'CEN2']:
         print('no thermistor string intalled')
         continue
     IMEI = meta.loc[meta.site_short==site,'IMEI'].values[0]    
    
-    cols=['time','counter','Pressure_L','Pressure_U','Asp_temp_L','Humidity_L','Humidity_U','WindSpeed_L','WindDirection_L','WindSpeed_U','WindDirection_U','SW Downward','SW Upward','LW Downward','LW Upward','TemperatureRadSensor','SR_L','SR_U','?', 'thermistorstring_1', 'thermistorstring_2','thermistorstring_3','thermistorstring_4','thermistorstring_5','thermistorstring_6','thermistorstring_7','thermistorstring_8','thermistorstring_9','thermistorstring_10','thermistorstring_11','Roll','Pitch','Heading','Rain_amount_L','Rain_amount_U','counterx','latitude', 'longitude','altitude','ss','Giodal','GeoUnit','Battery','NumberSatellites','HDOP','FanCurrent_L','FanCurrent_U','Quality','LoggerTemp']
+    cols=['time','counter','Pressure_L','Pressure_U','Asp_temp_L','Asp_temp_U','Humidity_L','Humidity_U','WindSpeed_L','WindDirection_L','WindSpeed_U','WindDirection_U','SWUpper','SWLower','LWUpper','LWLower','TemperatureRadSensor','SR1','SR2', 'thermistorstring_1', 'thermistorstring_2','thermistorstring_3','thermistorstring_4','thermistorstring_5','thermistorstring_6','thermistorstring_7','thermistorstring_8','thermistorstring_9','thermistorstring_10','thermistorstring_11','Roll','Pitch','Heading','Rain_amount_L','Rain_amount_U','Gtime','latitude', 'longitude','altitude','HDOP','FanCurrent_L','FanCurrent_U','BattVolt','PressureMinus1000_L','Asp_temp_L2','Humidity_L','WindSpeed_S_L','WindDirection_S_L','?']
+    
     values = [str, str, float,float,float,float,float,float,float,float, float,float, float,float,float,float,float,float,float,float,float,float,float,float,float,float,float, float,float,float,float,float,float,float,float,float,float,float,float,float,float,float, float,float,float,float,float,float,float,float]
     firn_temp_cols = ['thermistorstring_1','thermistorstring_2','thermistorstring_3','thermistorstring_4','thermistorstring_5','thermistorstring_6','thermistorstring_7','thermistorstring_8','thermistorstring_9','thermistorstring_10','thermistorstring_11']
     depth_cols = ['depth_'+str(i) for i in range(1,1+len(firn_temp_cols))]
     depth_ini_val = [0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 6, 8, 10]
     if site in ['SWC', 'JAR']:
         # SWC and JAR are PROMICE-type stations
-        cols=['time','counter','Pressure','Asp_temp','Humidity','WindDirection','WindSpeed','WindDirection2','SW Downward','SW Upward','LW Downward','LW Upward', 'TemperatureRadSensor', 'SR','SR2', 'thermistorstring_1', 'thermistorstring_2','thermistorstring_3','thermistorstring_4','thermistorstring_5','thermistorstring_6','thermistorstring_7','thermistorstring_8','???','??','Roll','Pitch','Heading','latitude', 'longitude', 'altitude', 'Rain_amount', 'Rain_amount2', 'counterx', 'ss', 'Giodal','GeoUnit','Battery','NumberSatellites', 'HDOP', 'FanCurrent', 'FanCurrent2', 'Quality','LoggerTemp','?1','?2']
+        cols=['time','counter','Pressure','Asp_temp','Humidity','WindSpeed','WindDirection','SWUpper','SWLower','LWUpper','LWLower','TemperatureRadSensor', 'SR1', 'SR2','IceHeight', 'thermistorstring_1', 'thermistorstring_2','thermistorstring_3','thermistorstring_4','thermistorstring_5','thermistorstring_6','thermistorstring_7','thermistorstring_8','Roll','Pitch','Rain_amount','TimeGPS','Heading','latitude', 'longitude', 'altitude', 'Rain_amount', 'Rain_amount2', 'counterx', 'ss', 'Giodal','GeoUnit','Battery','NumberSatellites', 'HDOP', 'FanCurrent', 'FanCurrent2', 'Quality','LoggerTemp','?1','?2']
+
         values = [str, str, float,float,float,float,float,float, float, float, float, float, float,float,float,float,float,float,float,float,float,float,float, float, float, float, float,float,float,float,float, float, float, float, float, float, float, float, float,float,float,float,float,float,float,float]
         firn_temp_cols=['thermistorstring_1','thermistorstring_2', 'thermistorstring_3', 'thermistorstring_4', 'thermistorstring_5', 'thermistorstring_6', 'thermistorstring_7', 'thermistorstring_8']
         depth_cols = ['depth_'+str(i) for i in range(1,1+len(firn_temp_cols))]
@@ -161,7 +175,9 @@ for site in meta.site_short:
         continue
 
     if site == 'NSE':
-        df=df.iloc[1:,:]   
+        df=df.iloc[1:,:]  
+    if site == 'SWC':
+        df=df.iloc[2:,:]  
     
     lat_deg = np.trunc(df['latitude']/100)
     lat_min = df['latitude'] - lat_deg*100
@@ -179,7 +195,8 @@ for site in meta.site_short:
     df = df.reset_index(drop=True).set_index('time')
     df = df.resample('H').mean().interpolate(limit=24*7)
     df = df.iloc[24*7:,:]
-
+    
+    # filtering temperature
     for col in firn_temp_cols:
         df.loc[df[col]>-0.1, col] = np.nan
         if site in ['SWC','SDM']:
@@ -187,10 +204,20 @@ for site in meta.site_short:
                            df[col].interpolate(limit=24*7)).abs() > 1
             df.loc[ind_filter,col]=np.nan
         df[col] = df[col].interpolate(limit=24*7).values
-        df[col].plot()
-
+        
+    # creating depth columns
+    plt.figure()
+    hs1 = df.SR1 * np.sqrt((df.Asp_temp_L+273.15)/273.15)
+    hs2 = df.SR2 * np.sqrt((df.Asp_temp_U+273.15)/273.15)
+    hs1.plot()
+    hs2.plot()
+    hs_summary = (hs1+hs2)/2
+    hs_summary = hs_summary-hs_summary[hs_summary.first_valid_index()]
+    hs_summary=hs_summary.rolling(24,center=True, min_periods=1).mean()
+    hs_summary.plot(linewidth=3)
+    
     for i, depth in enumerate(depth_cols):
-        df[depth] = depth_ini_val[i]
+        df[depth] = depth_ini_val[i] + hs_summary.values
     df_10 = ftl.interpolate_temperature(df.index, df[depth_cols].values,
                                         df[firn_temp_cols].values,
                                         kind='linear',

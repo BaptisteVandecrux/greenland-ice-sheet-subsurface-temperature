@@ -54,6 +54,7 @@ for ws in PROMICE_stations:
     df = pd.read_csv (filepath,  sep='\t', index_col=0, parse_dates=True,na_values=-999).resample('D').mean()
     df = df[['Year','MonthOfYear','DayOfYear','AirTemperature(C)',
              'AirTemperatureHygroClip(C)','SurfaceTemperature(C)','HeightSensorBoom(m)','HeightStakes(m)', 'SurfaceHeight_summary(m)', 'IceTemperature1(C)', 'IceTemperature2(C)', 'IceTemperature3(C)', 'IceTemperature4(C)', 'IceTemperature5(C)', 'IceTemperature6(C)', 'IceTemperature7(C)', 'IceTemperature8(C)']]
+    print(ws, df['AirTemperature(C)'].mean())
     df['station_name'] = ws[0]
     df['latitude N'] = ws[1][0]
     df['longitude W'] = ws[1][1]
@@ -194,8 +195,13 @@ df_PROMICE['reference'] = 'Fausto, R.S. and van As, D., (2019). Programme for mo
 
 
 df_PROMICE=df_PROMICE.set_index('date')
-df_PROMICE_month = df_PROMICE.groupby('site').resample('M').first()
-df_PROMICE_month.to_csv('Data/PROMICE/PROMICE_10m_firn_temperature.csv',sep=';')
+df_PROMICE_month_first = df_PROMICE.groupby('site').resample('M').first().reset_index('site',drop=True)
+df_PROMICE_month_mean = df_PROMICE.groupby('site').resample('M').mean().reset_index('site')
+for col in df_PROMICE_month_first.columns:
+    if col not in df_PROMICE_month_mean.columns:
+        print(col)
+        df_PROMICE_month_mean[col] = df_PROMICE_month_first[col]
+df_PROMICE_month_mean.to_csv('Data/PROMICE/PROMICE_10m_firn_temperature.csv',sep=';')
 
 # %% Plotting
 for site in sites_all:
