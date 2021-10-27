@@ -86,64 +86,8 @@ df_all = df_all.append(df_Pol[['date','site', 'latitude', 'longitude', 'elevatio
 
 # %% Ken's dataset  
 print('Loading Kens dataset')
-min_depth_1 = 20
-min_depth_2 = 50
-folders = [x[0] for x in os.walk('Data/greenland_ice_borehole_temperature_profiles-main')][1:]
-df_Ken=pd.DataFrame()
-for folder in folders:
-    if 'template' in folder or 'fig' in folder:
-        continue
-    data = pd.read_csv(folder+'\\data.csv')
-    data.d = np.abs(data.d)
-    data = data.set_index('d',drop=False)
-    data_save = data
-    metadata = pd.read_csv(folder+'\\meta.bsv',sep='|',header=None).transpose()
-    metadata.columns = metadata.iloc[0]
-    metadata = metadata.drop(metadata.index[0])
-    print(' ')
-    print('*',metadata.Name.iloc[0])
-    if 10 in data.d:
-        metadata['temperatureObserved'] = data.loc[10].t
-        metadata['depthOfTemperatureObservation'] = 10
-        metadata['note'] = 'measured at 10 m'
-    elif data.d.nsmallest(2).min()<min_depth_1 and data.d.nsmallest(2).max()<min_depth_2:
-        data = data.append({'d':10, 't':np.nan},ignore_index=True).set_index('d',drop=False)
-        metadata['temperatureObserved'] = interp_pandas(data.t)[10]
-        metadata['depthOfTemperatureObservation'] = 10
-        metadata['note'] = 'interpolated from '+str(np.round(data_save.d.nsmallest(5).values,5))+' m'
-    elif data.d.nsmallest(2).min()<min_depth_1 and data.d.nsmallest(2).max()>=min_depth_2:
-        metadata['temperatureObserved'] = data.loc[data.d.min()].t
-        metadata['depthOfTemperatureObservation'] = data.d.min()
-        metadata['note'] = 'no interpolation possible '+str(np.round(data.d.nsmallest(2).values,2))
-    elif data.d.nsmallest(2).min()>=min_depth_1:
-        print('too deep ', data.d.nsmallest(2).min(),' m')
-        continue
-    # if metadata['Measured from: Top, Bottom, Relative'].iloc[0].strip() != 'T':
-    #     break
-    print(np.round(metadata['temperatureObserved'].iloc[0],2), metadata['note'].iloc[0])
-    metadata['elevation'] = np.NaN
-    df_Ken = df_Ken.append(metadata[['Data year(s)', 'Name', 'Latitude [°N]', 'Longitude [°E]','elevation','depthOfTemperatureObservation', 'temperatureObserved', 'Data source', 'note' ]])
-df_Ken.columns = ['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference', 'note']
-df_Ken['reference_short'] = df_Ken.reference
+df_Ken = pd.read_excel('Data/greenland_ice_borehole_temperature_profiles-main/data_filtered.xlsx')
 
-for i, date in enumerate(df_Ken.date.values):
-    
-    if isinstance(date, float):
-        if np.isnan(date):
-            continue
-    else:
-        try: 
-            df_Ken.date.iloc[i] = str(int(date))+'-01-01'
-        except:
-            pass
-    if '-' in date:
-        tmp = date.split('-')
-        if int(tmp[1]) >1000:
-            df_Ken.date.iloc[i] = str(tmp[0]+'-01-01')
-    if date == '1950?':
-        df_Ken.date.iloc[i] = str('1950-01-01')
-df_Ken.date = pd.to_datetime(df_Ken.date)
-    
 df_all = df_all.append(df_Ken[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference','reference_short', 'note']], ignore_index=True)
 # %% Sumup
 # df_sumup = pd.read_csv('Data/Sumup/sumup_10m_borehole_temperature.csv')
@@ -462,6 +406,7 @@ for site in df.site:
     except: # Exception as e:
         # print(e)
         continue
+    
     print(site)
     temp_label = df_site.columns[1:]
     # the first column is a time stamp and is the decimal days after the first second of January 1, 2007. 
@@ -503,6 +448,7 @@ for site in df.site:
                                      df_site[depth_label].values,
                                      df_site[temp_label].values,
                                      title=site)
+    df_10 = df_10.set_index('date').resample('M').mean().reset_index()
         
     df_10 ['site'] = site
     df_10['latitude'] = df.loc[df.site == site,'latitude'].values[0]
@@ -845,15 +791,10 @@ df_all = df_all.append(meta[['date','site', 'latitude', 'longitude', 'elevation'
 
 # %% Checking values
 # df_ambiguous_date = df_all.loc[pd.to_datetime(df_all.date,errors='coerce').isnull(),:]
-
 # df_bad_long = df_all.loc[df_all.longitude.astype(float)>0,:]
-
 # df_no_coord = df_all.loc[np.logical_or(df_all.latitude.isnull(), df_all.latitude.isnull()),:]
-
 # df_invalid_depth =  df_all.loc[pd.to_numeric(df_all.depthOfTemperatureObservation,errors='coerce').isnull(),:]
-
 # df_no_elev =  df_all.loc[df_all.elevation.isnull(),:]
-
 # df_no_temp =  df_all.loc[df_all.temperatureObserved.isnull(),:]
 
 # %% Removing nan and saving

@@ -59,14 +59,14 @@ fig, ax = plt.subplots(1,1,figsize=(6, 9))
 fig.subplots_adjust(hspace=0.0, wspace=0.0,top=1,bottom=0,left=0,right=1)
 land.plot(ax = ax, zorder=0,color='black')
 ice.plot(ax = ax, zorder=1,color='lightblue')
-gdf.plot(ax = ax, column='year',  cmap = 'tab20c' , markersize=50, 
+gdf.plot(ax = ax, column='year',  cmap = 'tab20c' , markersize=30, 
          edgecolor = 'gray', legend = True,
          legend_kwds={'label': 'Year of measurement', 
                       "orientation": "horizontal",
                       'shrink': 0.8})
 
 plt.axis('off')
-plt.savefig('figures/fig1_map.png')
+plt.savefig('figures/fig1_map.png', dpi=300)
 
 # %% 
 df_select = df.loc[np.logical_and(df.latitude < 69,df.latitude < 90),:]
