@@ -1,0 +1,729 @@
+# -*- coding: utf-8 -*-
+"""
+@author: bav@geus.dk
+
+tip list:
+    %matplotlib inline
+    %matplotlib qt
+    import pdb; pdb.set_trace()
+"""
+
+import pandas as pd
+from datetime import datetime, timedelta
+import numpy as np
+from scipy.interpolate import interp1d
+import progressbar
+import matplotlib.pyplot as plt
+import firn_temp_lib as ftl
+import time
+import xarray as xr
+import time
+import geopandas as gpd
+from datetime import datetime as dt
+import time
+from rasterio.crs import CRS
+from  scipy import stats, signal #Required for detrending data and computing regression
+import statsmodels.api as sm
+from scipy.interpolate import Rbf
+import matplotlib as mpl
+from matplotlib import cm
+import rasterio as rio
+import rioxarray
+
+# loading Greenland elevation and latitude maps
+coarsening = 5
+elevation = rioxarray.open_rasterio('Data/misc/Ice.tiff').squeeze().coarsen(x=coarsening, boundary='trim').mean().coarsen(y=coarsening, boundary='trim').mean()
+
+latitude = rioxarray.open_rasterio('Data/misc/lat.tif').squeeze().coarsen(x=coarsening, boundary='trim').mean().coarsen(y=coarsening, boundary='trim').mean()
+latitude = latitude.where(elevation>1)
+elevation = elevation.where(elevation>1)
+
+def toYearFraction(date):
+    year = date.year
+    startOfThisYear = dt(year=year, month=1, day=1)
+    startOfNextYear = dt(year=year+1, month=1, day=1)
+
+    yearElapsed = (date - startOfThisYear).total_seconds()
+    yearDuration = (startOfNextYear - startOfThisYear).total_seconds()
+    fraction = yearElapsed/yearDuration
+
+    return date.year + fraction
+def calculate_trend(ds_month, year_start,year_end, var, dim1, dim2):
+    ds_month = ds_month.loc[dict(time=slice(str(year_start)+"-01-01", str(year_end)+"-12-31"))]
+    
+    vals = ds_month[var].values 
+    time = np.array([toYearFraction(d) for d in pd.to_datetime(ds_month.time.values)])
+    # Reshape to an array with as many rows as years and as many columns as there are pixels
+    vals2 = vals.reshape(len(time), -1)
+    # Do a first-degree polyfit
+    regressions = np.nan * vals2[:2,:]
+    ind_nan = np.all(np.isnan(vals2),axis=0)
+    regressions[:,~ind_nan] = np.polyfit(time, vals2[:,~ind_nan], 1)
+    # Get the coefficients back
+    trends = regressions[0,:].reshape(vals.shape[1], vals.shape[2])
+    return ([dim1, dim2],  trends)
+
+land = gpd.GeoDataFrame.from_file("Data/misc/Ice-free_GEUS_GIMP.shp")
+land = land.to_crs("EPSG:3413")
+
+elev_contours = gpd.GeoDataFrame.from_file("Data/misc/Contours1000.shp").to_crs("EPSG:3413")
+
+# loading temperature dataset
+df = pd.read_csv("10m_temperature_dataset_monthly.csv")
+df_ambiguous_date = df.loc[pd.to_datetime(df.date, errors="coerce").isnull(), :]
+df = df.loc[~pd.to_datetime(df.date, errors="coerce").isnull(), :]
+
+df_bad_long = df.loc[df.longitude > 0, :]
+df["longitude"] = -df.longitude.abs().values
+
+df_hans_tausen = df.loc[df.latitude > 82, :]
+df = df.loc[~(df.latitude > 82), :]
+
+df_no_coord = df.loc[np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
+df = df.loc[~np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
+
+df_invalid_depth = df.loc[
+    pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
+]
+df = df.loc[
+    ~pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
+]
+
+df_no_elev = df.loc[df.elevation.isnull(), :]
+df = df.loc[~df.elevation.isnull(), :]
+
+df["year"] = pd.DatetimeIndex(df.date).year
+
+df = (gpd.GeoDataFrame(df, geometry = gpd.points_from_xy(df.longitude, df.latitude)
+                        ).set_crs(4326).to_crs(3413))
+df['x_3413'] = df.geometry.x
+df['y_3413'] = df.geometry.y
+
+
+# % Loading RACMO T10m
+# ds = xr.open_dataset("C:/Data_save/RCM/RACMO/FDM_T10m_FGRN055_1957-2020_GrIS_GIC.nc")
+# ds_month = ds.resample(time = 'M').mean()
+
+# year_ranges = np.array([[1960, 1995],[1960, 2020], [1996, 2013], [2014,2020]])
+# for i in range(4):
+#     ds_month["trend_"+str(i)] = calculate_trend(ds_month, year_ranges[i][0],year_ranges[i][1],
+#                                                 'T10m','rlat','rlon')
+
+# T10m_GrIS = (ds.T10m.mean(dim=('rlat','rlon'))-273.15).to_pandas()
+
+# # reprojecting
+# crs_racmo = CRS.from_proj4('-m 57.295779506 +proj=ob_tran +o_proj=latlon +o_lat_p=18.0 +o_lon_p=0  +lon_0=-37.5')
+# ds_month = ds_month.rio.write_crs(crs_racmo)
+# ds_month = ds_month.rio.reproject("EPSG:3413")
+
+# Plotting RACMO firn temp vs ERA air temp
+# plt.figure()
+# T10m_GrIS.resample('Y').mean().plot(label='10 m firn temperature in RACMO')
+# # t2m_land.t2m.plot()
+# t2m_GrIS.resample('Y').mean().rolling(5).mean().t2m.plot(drawstyle='steps',label='2 m air temperature in ERA5')
+# plt.ylabel('GrIS-wide average temperature ($^o$ C)')
+# plt.legend()
+
+
+# % loading ERA T2m
+for yr in range(1950,2020,6):
+    print(yr)
+    if yr == 1950:
+        ds_era = xr.open_dataset('Data/ERA5/m_era5_t2m_'+str(yr)+'_'+str(yr+5)+'.nc')
+    else:
+        ds_era = xr.concat((ds_era,
+                             xr.open_dataset('Data/ERA5/m_era5_t2m_'+str(yr)+'_'+str(yr+5)+'.nc')),'time')
+   
+# reprojecting
+ds_era = ds_era.rio.write_crs("EPSG:4326")
+ds_era = ds_era.rio.reproject("EPSG:3413")
+
+# adding lat and lon as vatriable
+ny, nx = len(ds_era['y']), len(ds_era['x'])
+x, y = np.meshgrid(ds_era['x'], ds_era['y'])
+
+# Rasterio works with 1D arrays
+from rasterio.warp import transform
+lon, lat = transform( {'init': 'EPSG:3413'}, {'init': 'EPSG:4326'},
+                     x.flatten(), y.flatten())
+lon = np.asarray(lon).reshape((ny, nx))
+lat = np.asarray(lat).reshape((ny, nx))
+ds_era.coords['lon'] = (('y', 'x'), lon)
+ds_era.coords['lat'] = (('y', 'x'), lat)
+
+# % Extract ERA time series
+
+df_era = pd.DataFrame()
+time_ERA = ds_era["time"].values
+df = df.reset_index(drop=True)
+
+points = [str(x)+str(y) for x, y in zip(df.x_3413, df.y_3413)]
+_, ind_list = np.unique(points, return_index =True) 
+ind_list = np.sort(ind_list)
+          
+for ind in progressbar.progressbar(ind_list):
+    df_point = (
+        ds_era.t2m.sel(x = df.loc[ind].x_3413,
+                       y = df.loc[ind].y_3413,
+                       method = 'nearest',
+                       ) - 273.15
+    ).to_dataframe()
+    df_point['ind'] = ind
+    df_point=df_point.set_index(['ind','lat','lon'],append=True)
+    df_point['lat_obs'] = df.loc[ind].latitude
+    df_point['lon_obs'] = df.loc[ind].longitude
+    df_era = df_era.append(df_point[['lat_obs','lon_obs','t2m']])
+df_era = df_era.reset_index('lat').reset_index('lon')
+
+# % Comparison of t2m and t10m: final comparison
+firn_memory_time = 5
+shift = 1
+x=[]
+y=[]
+df['era_avg_t2m'] = np.nan
+for ind_loc in progressbar.progressbar(df_era.index.get_level_values(1).unique()):
+    lat = df_era.xs(ind_loc, level=1).lat_obs[0]
+    lon = df_era.xs(ind_loc, level=1).lon_obs[0]
+    df_loc = df.loc[(df.latitude == lat)&(df.longitude == lon),:].copy()
+    for ind_meas in df_loc.index:
+        date = pd.to_datetime(df.loc[ind].date)- pd.DateOffset(years=shift)
+        date0 = date- pd.DateOffset(years=firn_memory_time)- pd.DateOffset(years=shift)
+        
+        x.append(df_era.xs(ind_loc, level=1).loc[date0:date,'t2m'].mean())
+        df.loc[ind_meas,'era_avg_t2m'] = df_era.xs(ind_loc, level=1).loc[date0:date,'t2m'].mean()
+        
+        y.append(df.loc[ind_meas].temperatureObserved)
+
+x = np.array(x)
+y = np.array(y)
+df_save = df
+
+
+fig = plt.figure()
+plt.plot(df.era_avg_t2m.values, df.temperatureObserved.values, 'o',markersize=1)
+plt.plot([-30, 0], [-30, 0], color='black')
+plt.title(str(shift)+' years shift. RMSE = %0.3f $^o$ C'%np.sqrt(np.nanmean((df.era_avg_t2m.values- df.temperatureObserved.values)**2)))
+plt.xlabel('ERA5 average 2 m air temperature ($^o$ C)')
+plt.ylabel('Observed 10 m firn temperature ($^o$ C)')
+fig.savefig(str(shift)+'_years_shift_5_year_memory_air_firn_temp.png') 
+
+df['era_dev'] = df.temperatureObserved - df.era_avg_t2m
+df_save['era_dev'] = df_save.temperatureObserved - df_save.era_avg_t2m
+
+# %% Comparison of t2m and t10m: sensitivity to the memory of the subsurface
+# for firn_memory_time in range(1,21):
+#     x=[]
+#     y=[]
+#     for ind in progressbar.progressbar(df_era.index.get_level_values(1).unique()):
+#         date = pd.to_datetime(df.loc[ind].date)
+#         date0 = date- pd.DateOffset(years=firn_memory_time)
+#         x.append(df_era.xs(ind, level=1).loc[date0:date,'t2m'].mean())
+#         y.append(df.loc[ind].temperatureObserved)
+#     x = np.array(x)
+#     y = np.array(y)
+    
+#     fig = plt.figure()
+#     plt.plot(x,y, 'o',markersize=1)
+#     plt.plot([np.nanmin(y), np.nanmax(y)], [np.nanmin(y), np.nanmax(y)], color='black')
+#     plt.title(str(firn_memory_time)+' years memory. RMSE = %0.3f $^o$ C'%np.sqrt(np.nanmean((x-y)**2)))
+#     plt.xlabel('ERA5 average 2 m air temperature ($^o$ C)')
+#     plt.ylabel('Observed 10 m firn temperature ($^o$ C)')
+#     fig.savefig(str(firn_memory_time)+'_years_memory_air_firn_temp.png')
+
+# for ind in progressbar.progressbar(df_era.index.get_level_values(1).unique()):
+#     date = pd.to_datetime(df.loc[ind].date)
+#     date0 = date- pd.DateOffset(years=3)
+#     if date < time_ERA[0]:
+#         continue
+
+#     fig, ax = plt.subplots(1,1)
+#     ax.set_title(df.loc[ind].site)
+#     ax.plot([date0, date], 
+#             np.array([1, 1])*df.loc[ind].temperatureObserved,
+#             label='firn temp',linewidth=2)
+#     for firn_memory_time in range(1,11):
+#         date = pd.to_datetime(df.loc[ind].date)
+#         date0 = date- pd.DateOffset(years=firn_memory_time)
+#         ax.plot(pd.to_datetime([date0, date]), 
+#             np.array([1, 1])*df_era.xs(ind, level=1).loc[date0:date,'t2m'].mean(),
+#                     label=str(firn_memory_time)+' years average')
+#         ax.legend()
+#     df_era.xs(ind, level=1).t2m.resample('Y').mean().plot(ax=ax, label='air temp')
+
+# BEST averaging period: 15 years
+
+# % Comparison of t2m and t10m: sensitivity to the lag time
+# firn_memory_time = 5
+# for shift in range(1,20):
+#     x=[]
+#     y=[]
+#     for ind in progressbar.progressbar(df_era.index.get_level_values(1).unique()):
+#         date = pd.to_datetime(df.loc[ind].date)- pd.DateOffset(years=shift)
+#         date0 = date- pd.DateOffset(years=firn_memory_time)- pd.DateOffset(years=shift)
+#         x.append(df_era.xs(ind, level=1).loc[date0:date,'t2m'].mean())
+#         y.append(df.loc[ind].temperatureObserved)
+#     x = np.array(x)
+#     y = np.array(y)
+    
+#     fig = plt.figure()
+#     plt.plot(x,y, 'o',markersize=1)
+#     plt.plot([np.nanmin(y), np.nanmax(y)], [np.nanmin(y), np.nanmax(y)], color='black')
+#     plt.title(str(shift)+' years shift. RMSE = %0.3f $^o$ C'%np.sqrt(np.nanmean((x-y)**2)))
+#     plt.xlabel('ERA5 average 2 m air temperature ($^o$ C)')
+#     plt.ylabel('Observed 10 m firn temperature ($^o$ C)')
+#     fig.savefig(str(shift)+'_years_shift_5_year_memory_air_firn_temp.png') 
+
+
+
+
+#%% Investigating how much the meassurements depend on the month of collection
+# site_list = df.index.get_level_values(1).unique()
+# temp_month_all=[]
+# temp_year_all=[]
+# month_all=[]
+# temp_avg_all = []
+# for site in site_list:
+#     if (df.xs(site,level='site').shape[0] < 12) | (df.xs(site,level='site').index.unique().shape[0] < 12):
+#         continue
+#     else:
+#         print(site)
+#         df_site = df.xs(site,level='site')
+#         df_site.loc[:,'date'] = [pd.to_datetime(d) for d in df_site.reset_index().date]
+#         df_site = df_site.set_index('date')
+#         df_site = df_site.resample('M').mean()
+#         df_rolling = df_site.rolling(12, min_periods = 12).mean()
+        
+#         temp_month = df_site.loc[df_rolling.temperatureObserved.notnull(), 'temperatureObserved']
+#         temp_year = df_rolling.loc[df_rolling.temperatureObserved.notnull(), 'temperatureObserved']
+#         month = df_site.loc[df_rolling.temperatureObserved.notnull(), 'temperatureObserved'].index.month
+#         temp_avg = df_site.temperatureObserved.mean()
+        
+#         temp_month_all.extend(temp_month.tolist())
+#         temp_year_all.extend(temp_year.tolist())
+#         month_all.extend(month.tolist())
+#         temp_avg_all.extend((temp_avg+temp_year*0).tolist())
+
+#         # df_site.temperatureObserved.plot()
+#         # df_rolling.temperatureObserved.plot()
+#         # plt.plot(month, temp_month - temp_year, 'o')
+# temp_month_all=np.array(temp_month_all)
+# temp_year_all=np.array(temp_year_all)
+# month_all=np.array(month_all)
+# temp_avg_all = np.array(temp_avg_all)
+
+
+# plt.figure()
+# plt.scatter(month_all, temp_month_all-temp_year_all, 5, temp_avg_all)
+
+# plt.figure()
+# plt.scatter(month_all, temp_avg_all, 20, temp_month_all-temp_year_all)
+
+
+# diff_month_year = temp_month_all-temp_year_all
+
+# data = [diff_month_year[month_all==i] for i in range(1,13)]
+ 
+# fig = plt.figure(figsize =(10, 7))
+# plt.boxplot(data)
+# plt.plot([0, 13],[0, 0 ],'--',color='black')
+
+
+# %% Model lat_elev_grid to map deviation between Ta and T10m
+import itertools
+from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+import cartopy.crs as ccrs
+import matplotlib.ticker as mticker
+from scipy.spatial import cKDTree
+
+step_lat = 5.
+latitude_bins = np.arange(60., 90., step_lat)
+
+step_elev = 500.
+elevation_bins = np.arange(0., 4000., step_elev)
+
+x_center, y_center = np.meshgrid(latitude_bins + step_lat / 2,
+    elevation_bins + step_elev / 2, 
+)
+x_org = np.unique((x_center - np.min(x_center)) / np.max(x_center).flatten())
+y_org = np.unique((y_center - np.min(y_center)) / np.max(y_center).flatten())
+
+real_x = np.arange(60., 86., 0.1) # latitude_bins 
+real_y = np.arange(0., 3400., 10.) # elevation_bins
+xx, yy = np.meshgrid(real_x, real_y)  # ,np.arange(0,1600,10))
+dx = (real_x[1] - real_x[0]) / 2.0
+dy = (real_y[1] - real_y[0]) / 2.0
+extent = [real_x[0], real_x[-1]+dx*2, real_y[-1]+dy*2, real_y[0]]
+
+def fitting_surface(df, target_var = "temperatureObserved", order = 3):
+    grid_temp = np.empty((len(elevation_bins), len(latitude_bins)))
+    grid_temp[:] = np.nan
+
+    for i in range(len(elevation_bins) - 1):
+        for j in range(len(latitude_bins) - 1):
+            conditions = np.array(
+                (
+                    df.elevation >= elevation_bins[i],
+                    df.elevation < elevation_bins[i + 1],
+                    df.latitude >= latitude_bins[j],
+                    df.latitude < latitude_bins[j + 1],
+                )
+            )
+            msk = np.logical_and.reduce(conditions)
+            grid_temp[i, j] = df.loc[msk, target_var].mean()
+            if df.loc[msk, "temperatureObserved"].count()==0:
+                df.loc[msk, "weight"] = 0
+            else:
+                df.loc[msk, "weight"] = 1/df.loc[msk, "temperatureObserved"].count()
+
+    # method #1
+    def polyfit2d(x, y, z, W = [], order=3):
+        ncols = (order + 1)**2
+        G = np.zeros((x.size, ncols))
+        ij = itertools.product(range(order+1), range(order+1))
+        for k, (i,j) in enumerate(ij):
+            G[:,k] = x**i * y**j
+        if len(W)==0:
+            W = np.diag(z*0+1)            
+        else:
+            W = np.sqrt(np.diag(W))
+        Gw = np.dot(W,G)
+        zw = np.dot(z,W)
+        m, _, _, _ = np.linalg.lstsq(Gw, zw, rcond=None)
+        return m
+
+    def polyval2d(x, y, m):
+        order = int(np.sqrt(len(m))) - 1
+        ij = itertools.product(range(order+1), range(order+1))
+        z = np.zeros_like(x)
+        for a, (i,j) in zip(m, ij):
+            z += a * x**i * y**j
+        
+        # removing output for cells that are closest to a NaN in grid_temp
+        s1 = np.array([[x, y/100] for x,y in zip(x.flatten(),y.flatten())])
+        # s2 = np.array([[x, y] for x,y in zip(x_center.flatten(),y_center.flatten())])
+        s2 = np.array([[x, y/100] for x,y in zip(df.latitude.values, df.elevation.values)])
+        
+        min_dists, min_dist_idx = cKDTree(s2).query(s1, 1)
+        
+        z = z.flatten()
+        # msk1 = (min_dist_idx==len(s2))
+        # min_dist_idx[min_dist_idx == len(s2)] = 0
+        # msk2 = np.isnan(grid_temp.flatten()[min_dist_idx])
+        # z[msk1|msk2] = np.nan
+        z[min_dists>3] = np.nan
+        z = np.reshape(z,x.shape)
+        return z
+
+
+    m = polyfit2d(df.loc[df[target_var].notnull(), 'latitude'],
+                  df.loc[df[target_var].notnull(), 'elevation'],
+                  df.loc[df[target_var].notnull(), target_var],
+                  W = df.loc[df[target_var].notnull(), 'weight'],
+                  order = order)
+    zz = polyval2d(xx+dx, yy+dy, m)
+    
+    # filtering zz for unlikely elevations and latitude:
+    # for i in range(len(real_x)):
+    #     msk = (latitude.values>= real_x[i]) & (latitude.values < (real_x[i]+2*dx)) 
+    #     if np.sum(msk)>0:
+    #         min_elev = np.min(elevation.values[msk])
+    #         max_elev = np.max(elevation.values[msk])
+    #         zz[real_y+dy < min_elev,i] = np.nan
+    #         zz[real_y+dy > max_elev+100,i] = np.nan
+    #     else:
+    #         zz[:,i] = np.nan
+    #         zz[:,i] = np.nan
+
+    res =  df[target_var] - polyval2d(df.latitude.values, df.elevation.values, m)
+    T10_mod = elevation.copy()
+    T10_mod.values = polyval2d(latitude.values, 
+                               elevation.values,
+                               m)
+    # method 2
+    # fitted_surface = Rbf(
+    #     (x_center[~np.isnan(grid_temp)] - np.min(x_center)) / np.max(x_center),
+    #     (y_center[~np.isnan(grid_temp)] - np.min(y_center)) / np.max(y_center),
+    #     grid_temp[~np.isnan(grid_temp)],
+    #     function="cubic",
+    # )
+    # def rbf3(x,y, fitted_surface):
+    #     out = fitted_surface(x,y)
+    #     # if len(x.shape)>1:
+    #     #     shape = x.shape
+    #     #     x = x.flatten()
+    #     #     y = y.flatten()
+    #     # else:
+    #     #     shape = []
+    #     # point_list_out = [(x, y) for (x, y) in zip(x,y)]
+    #     # for k, (x0, y0) in enumerate(point_list_out):
+    #     #     ind_x_org_closest = (np.abs(x_org - x0)).argmin()
+    #     #     ind_y_org_closest = (np.abs(y_org - y0)).argmin()
+    #     #     if np.isnan(grid_temp[ind_y_org_closest, ind_x_org_closest]):
+    #     #         if shape:
+    #     #             i, j =  np.unravel_index(k, shape)
+    #     #             out[i, j] = np.nan
+    #     #         else:
+    #     #             out[k] = np.nan
+    #     return out
+         
+
+    # zz = rbf3(
+    #     (xx - np.min(x_center)) / np.max(x_center),
+    #     (yy - np.min(y_center)) / np.max(y_center),
+    #     fitted_surface
+    # )
+
+    # T10_mod = elevation.copy()
+    # T10_mod.values = rbf3(
+    #     (latitude.values - np.min(x_center)) / np.max(x_center),
+    #     (elevation.values - np.min(y_center)) / np.max(y_center),
+    #     fitted_surface
+    #     )
+
+    return zz, T10_mod, res
+
+
+def plot_latitude_elevation_space(ax, zz, df = [], 
+                                  target_var = "temperatureObserved",
+                                  vmin = -35, vmax = 0,
+                                  contour_levels = [],
+                                  cmap ='coolwarm'):
+    ax.set_facecolor("black")
+    im = ax.imshow(zz, extent=extent,
+                    aspect="auto", cmap=cmap,vmin=vmin, vmax=vmax)
+    if len(contour_levels)>0:
+        CS = ax.contour(zz, contour_levels, colors='k', origin='upper', extent=extent)
+        ax.clabel(CS, CS.levels, inline=True, fontsize=10)
+
+
+    # scatter residual
+    if len(df)>0:
+        sct = ax.scatter(
+            df["latitude"],
+            df["elevation"],
+            s=80,
+            c=df[target_var],
+            edgecolor="gray",
+            cmap = cmap,
+            vmin=vmin,vmax=vmax,
+            zorder=10
+        )
+    ax.set_yticks(elevation_bins)
+    ax.set_xticks(latitude_bins)
+    ax.grid()
+    ax.set_ylim(0, 3500)
+    ax.set_xlim(60, 82)
+    ax.set_ylabel("Elevation (m a.s.l.)")
+    ax.set_xlabel("Latitude ($^o$N)")
+    ax.set_title(
+        "Elevation - Latitude model"
+    )
+    return im
+
+
+def plot_greenland_map(ax, T10_mod, df, 
+                       target_var = "temperatureObserved",
+                       vmin = -5, vmax = 5,
+                       colorbar_label = '',
+                       colorbar = True,
+                       cmap = 'coolwarm'):
+    if colorbar:
+        cbar_kwargs={'label': colorbar_label, 'orientation':'vertical', 'location':'left'}
+    else:
+        cbar_kwargs={}
+    land.plot(ax=ax, zorder=0, color="black", transform = ccrs.epsg(3413))
+    
+    T10_mod.plot(ax =ax, cmap=cmap, add_colorbar = colorbar, 
+                 cbar_kwargs=cbar_kwargs,
+                 vmin = vmin, vmax = vmax, transform = ccrs.epsg(3413)
+                 )
+    elev_contours.plot(ax=ax, color="gray", transform = ccrs.epsg(3413))
+
+    ax.set_extent([-57, -30, 59, 84], crs=ccrs.PlateCarree())
+    gl = ax.gridlines(draw_labels=True, x_inline=False, y_inline=False)
+    gl.xlabel_style = {'rotation': 0}
+    gl.ylabel_style = {'rotation': 0}
+    ax.set_title('')
+    
+    if len(df)>0:
+        df.plot(
+        ax=ax,
+        column=target_var,
+        cmap=cmap,
+        vmin = vmin,
+        vmax = vmax,
+        markersize=30,
+        edgecolor="gray",
+        legend=False, 
+        transform = ccrs.epsg(3413)
+    )
+
+target_var = 'temperatureObserved'
+
+if target_var == "era_dev":
+    colorbar_label = "Deviation between $T_{10m}$ \nand $Ta_{ERA5, y}$ ($^o$C)"
+    vmin = -5
+    vmax = 5
+    contour_levels = np.arange(-5,5)
+    order=4
+
+elif target_var == "temperatureObserved":
+    colorbar_label = "$T_{10m}$ ($^o$C)"
+    contour_levels = np.arange(-50,0,5)
+    vmin = -35
+    vmax = 0
+    order=3  
+    
+    
+#%% T10m or era_dev for given periods
+start = [1950, 1990, 2010, 2015]
+end = [1990, 2010, 2015, 2022]
+# 'era_dev', '
+for target_var in ['temperatureObserved']:
+    if target_var == "era_dev":
+        colorbar_label = "Deviation between $T_{10m}$ \nand $Ta_{ERA5, y}$ ($^o$C)"
+        vmin = -5
+        vmax = 5
+        contour_levels = np.arange(-5,5)
+        order=3
+    
+    elif target_var == "temperatureObserved":
+        colorbar_label = "$T_{10m}$ ($^o$C)"
+        contour_levels = np.arange(-50,0,5)
+        vmin = -35
+        vmax = 0
+        order=2
+        
+    fig = plt.figure(figsize=(20, 18))
+    plt.subplots_adjust(left=0.07, bottom=0.1, right=0.95, top=0.87, wspace=0.2, hspace=0.2)
+            
+    for i, (s, e) in enumerate(zip(start, end)):
+        df = df_save.reset_index()
+        df = df.loc[(df.date>=str(s)) & (df.date<str(e)),:]
+        print(str(s)+'-'+str(e)+': '+str(df.shape[0])+' measurements (out of '+str(df_save.shape[0])+')')
+
+        zz, T10_mod, res = fitting_surface(df, target_var, order = order)
+    
+    
+        # subsurface temperature regression latitude elevation
+        ax = fig.add_subplot(2, 4, i+1)
+        im = plot_latitude_elevation_space(ax, zz, df, target_var, vmin = vmin, vmax = vmax, contour_levels=contour_levels)
+        ax.set_title(str(s)+'-'+str(e))
+        
+        # ax = fig.add_subplot(2, 2, 3)
+        # ax.plot(df.longitude, res, marker='o', linestyle='')
+        # ax.set_title('RMSE = %0.2f'%np.sqrt(np.mean(res**2)))
+        # ax.set_xlabel('Longitude  ($^o$W)')
+        # ax.set_ylabel('Residual of the fit  ($^o$C)')
+        
+        # temperature map
+        ax = fig.add_subplot(2, 4, i+5, projection = ccrs.NorthPolarStereo(-45))
+        plot_greenland_map(ax, T10_mod, df, target_var, 
+                           vmin = vmin, vmax = vmax, 
+                           colorbar_label=colorbar_label,
+                           colorbar = False)
+    cbar_ax = fig.add_axes([0.15, 0.91, 0.7, 0.03])
+    fig.colorbar(im, cax=cbar_ax, orientation = 'horizontal', label = colorbar_label)
+    cbar_ax.xaxis.tick_top()
+    cbar_ax.xaxis.set_label_position('top') 
+    plt.savefig("figures/" +target_var+ "_lat_elev_model_deviation_Ta_T10m_three_periods.png")
+    
+# %% Change maps temperature
+target_var = "temperatureObserved"
+colorbar_label = "$T_{10m}$ ($^o$C)"
+contour_levels = np.arange(-50,0,5)
+vmin = -35
+vmax = 0
+order=4  
+        
+s=1950
+e=1990
+df = df_save.reset_index()
+df = df.loc[(df.date>=str(s)) & (df.date<str(e)),:]
+zz_1, T10_mod_1, res_1 = fitting_surface(df, target_var, order = order)
+
+s=1990
+e=2010
+df = df_save.reset_index()
+df = df.loc[(df.date>=str(s)) & (df.date<str(e)),:]
+zz_2, T10_mod_2, res_2 = fitting_surface(df, target_var, order = order)
+
+s=2010
+e=2015
+df = df_save.reset_index()
+df = df.loc[(df.date>=str(s)) & (df.date<str(e)),:]
+zz_3, T10_mod_3, res_3 = fitting_surface(df, target_var, order = order)
+
+s=2015
+e=2022
+df = df_save.reset_index()
+df = df.loc[(df.date>=str(s)) & (df.date<str(e)),:]
+zz_4, T10_mod_4, res_4 = fitting_surface(df, target_var, order = order)
+
+zz_diff_1 = zz_2- zz_1
+zz_diff_2 = zz_3- zz_2
+zz_diff_3 = zz_4- zz_3
+
+T10_mod_diff_1 = T10_mod_2- T10_mod_1
+T10_mod_diff_2 = T10_mod_3- T10_mod_2
+T10_mod_diff_3 = T10_mod_4- T10_mod_3
+
+vmin = -4.5
+vmax = 4.5
+import matplotlib
+# %% 
+fig = plt.figure(figsize=(10, 18))
+plt.subplots_adjust(left=0.07, bottom=0.1, right=0.95, top=0.87, wspace=0.2, hspace=0.2)
+cmap = matplotlib.cm.get_cmap('bwr', int(vmax-vmin))
+# subsurface temperature regression latitude elevation
+ax = fig.add_subplot(2, 3, 1)
+im = plot_latitude_elevation_space(ax, zz_diff_1,
+                                   vmin = vmin, vmax = vmax, # contour_levels=np.arange(-5, 5),
+                                   cmap = cmap)
+ax.set_title('1990-2009 minus 1950-1989')
+
+ax = fig.add_subplot(2, 3, 4, projection = ccrs.NorthPolarStereo(-45))
+plot_greenland_map(ax, T10_mod_diff_1, [], target_var, 
+                   vmin = vmin, vmax = vmax, 
+                   colorbar_label=colorbar_label,
+                   colorbar = False,
+                   cmap = cmap)
+
+ax = fig.add_subplot(2, 3, 2)
+im = plot_latitude_elevation_space(ax, zz_diff_2,
+                                   vmin = vmin, vmax = vmax,# contour_levels=np.arange(-5, 5),
+                                   cmap = cmap)
+ax.set_title('2010-2014 minus 1990-2010')
+
+ax = fig.add_subplot(2, 3, 5, projection = ccrs.NorthPolarStereo(-45))
+plot_greenland_map(ax, T10_mod_diff_2, [], target_var, 
+                   vmin = vmin, vmax = vmax, 
+                   colorbar_label=colorbar_label,
+                   colorbar = False,
+                   cmap = cmap)
+
+ax = fig.add_subplot(2, 3, 3)
+im = plot_latitude_elevation_space(ax, zz_diff_3,
+                                   vmin = vmin, vmax = vmax,# contour_levels=np.arange(-5, 5),
+                                   cmap = cmap)
+ax.set_title('2015-2022 minus 2010-2014')
+ax = fig.add_subplot(2, 3, 6, projection = ccrs.NorthPolarStereo(-45))
+plot_greenland_map(ax, T10_mod_diff_3, [], target_var, 
+                   vmin = vmin, vmax = vmax, 
+                   colorbar_label=colorbar_label,
+                   colorbar = False,
+                   cmap = cmap)
+
+cbar_ax = fig.add_axes([0.15, 0.91, 0.7, 0.03])
+fig.colorbar(im, cax=cbar_ax, orientation = 'horizontal', label = colorbar_label)
+cbar_ax.xaxis.tick_top()
+cbar_ax.xaxis.set_label_position('top') 
+plt.savefig("figures/temperatureObserved_lat_elev_model_difference.png")
+
+
+# # %% 3d plot if needed
+# fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+# surf = ax.plot_surface(xx,yy,zz, cmap=cm.coolwarm,
+#                        linewidth=0, alpha=0.5)
+
+# ax.scatter(df.latitude, df.elevation, df[target_var])

@@ -1,9 +1,7 @@
 To do:
-NASA-SE firn cover first measurement
-check hills 2018 first measurement
-check PROMICE
-French Camp H1 and H2 coordinates
-check CP1 firncover
-fix gcnv2 elevation
-
-check NUK_U surface height
+TAS-A remove maintenance in 2016
+THU_L surface height
+QAS_L surface height
+NUK_U surface height
+KAN_L surface height
+right adjustment FirnCover
