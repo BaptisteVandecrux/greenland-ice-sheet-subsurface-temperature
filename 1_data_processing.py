@@ -681,6 +681,8 @@ rtd_df = rtd_df.set_index(["sitename", "date"])
 df_firncover = pd.DataFrame()
 for site in sites:
     df_d = rtd_df.xs(site, level="sitename").reset_index()
+    
+    df_d.to_csv('FirnCover_'+site+'.csv')
 
     df_10 = ftl.interpolate_temperature(
         df_d["date"],
@@ -1084,6 +1086,8 @@ df.loc['2018-05-18':, 'depth_2'] = df.loc['2018-05-18':, 'depth_2'].values - 1.8
 # for i in range(1,9):
 #     df_d['depth_'+str(i)] = df.loc[df['level']==i,'depth'].values
 
+# df.to_csv('Heilig_Dye-2_thermistor.csv')
+
 df_achim = ftl.interpolate_temperature(df.index,
                              df[depth_label].values,
                              df[temp_label].values,
@@ -1092,7 +1096,7 @@ df_achim['site'] = 'DYE-2'
 df_achim['latitude'] = 66.4800
 df_achim['longitude'] = -46.2789
 df_achim['elevation'] = 2165.0
-df_achim['depthOfTemperatureObservation'] = 2165.0
+df_achim['depthOfTemperatureObservation'] = 10
 df_achim['note'] = 'interpolated at 10 m, using surface height from FirnCover station'
 df_achim['reference'] = 'Heilig, A., Eisen, O., MacFerrin, M., Tedesco, M., and Fettweis, X.: Seasonal monitoring of melt and accumulation within the deep percolation zone of the Greenland Ice Sheet and comparison with simulations of regional climate modeling, The Cryosphere, 12, 1851–1866, https://doi.org/10.5194/tc-12-1851-2018, 2018. '
 df_achim['reference_short'] = 'Heilig et al. (2018)'
@@ -1779,74 +1783,6 @@ for site, filename in zip(sites, filenames):
         ignore_index=True,
     )
     
-# %% Vanderveen
-# df = pd.read_excel('Data/Vanderveen et al. 2001/summary.xlsx')
-# df = df.loc[df.date1.notnull(), :]
-# df = df.loc[df.Temperature_celsius.notnull(), :]
-# df['site'] = [str(s) for s in df.site]
-# df['date'] = pd.to_datetime(df.date1) + (pd.to_datetime(df.date2)-pd.to_datetime(df.date1))/2
-# df['note'] = ''
-# df.loc[np.isnan(df['date']),'note'] = 'only year available'
-# df.loc[np.isnan(df['date']),'date'] = pd.to_datetime([str(y)+'-07-01' for y in df.loc[np.isnan(df['date']),'date1'].values])
-
-# df['temperatureObserved'] = df['Temperature_celsius']
-# df['depthOfTemperatureObservation'] = df['Depth_centimetre']/100
-# tmp, ind = np.unique([str(x)+str(y) for (x,y) in zip(df.site, df.date)],
-#                      return_inverse = True)
-# df_interp = pd.DataFrame()
-# for i in np.unique(ind):
-#     core_df = df.loc[ind==i,:]
-#     if core_df['depthOfTemperatureObservation'].max()<9:
-#         continue
-#     if core_df['depthOfTemperatureObservation'].min()>11:
-#         continue
-#     if len(core_df['depthOfTemperatureObservation'])<2:
-#         continue
-    
-#     tmp = core_df.iloc[0, :].copy()
-#     f = interp1d(
-#         core_df["depthOfTemperatureObservation"].values,
-#         core_df["temperatureObserved"].values,
-#         fill_value="extrapolate",
-#     )
-#     tmp.temperatureObserved = f(10)
-#     tmp.depthOfTemperatureObservation = 10
-#     tmp.note = "digitized, interpolated at 10 m"
-#     df_interp = df_interp.append(tmp)
-    
-#     plt.figure()
-#     plt.plot(core_df.temperatureObserved,
-#              -core_df.depthOfTemperatureObservation,
-#              marker='o')
-#     plt.plot(tmp.temperatureObserved, 
-#              -tmp.depthOfTemperatureObservation,  marker='o')
-#     plt.title(tmp.site)
-    
-#     # core_df  = interp_pandas(core_df)
-# df = df.append(df_interp)
-
-# df['reference'] = 'van der Veen, C. J., Mosley-Thompson, E., Jezek, K. C., Whillans, I. M., and Bolzan, J. F.: Accumulation rates in South and Central Greenland, Polar Geography, 25, 79–162, https://doi.org/10.1080/10889370109377709, 2001.'
-# df['reference_short'] = 'van der Veen et al. (2001)'
-
-# df_all = df_all.append(
-#     df[
-#         [
-#             "date",
-#             "site",
-#             "latitude",
-#             "longitude",
-#             "elevation",
-#             "depthOfTemperatureObservation",
-#             "temperatureObserved",
-#             "reference",
-#             "reference_short",
-#             "note",
-#         ]
-#     ],
-#     ignore_index=True,
-# )
-
-
 # %% Stauffer and Oeschger 1979
 df_s_o = pd.read_excel('Data/Stauffer and Oeschger 1979/Stauffer&Oeschger1979.xlsx')
 
@@ -2034,6 +1970,8 @@ for i, site in enumerate(['s5','s6','s9']):
                 kind='slinear',
                 surface_height = surface_height
                 )
+    df_10 = df_10.set_index("date").resample("M").mean().reset_index()
+
     df_10['site'] = site
     df_10['note'] = ''
     df_10['latitude'] = df_meta.loc[df_meta.site==site, 'latitude'].values[0]
@@ -2046,6 +1984,369 @@ df_imau['depthOfTemperatureObservation'] = 10
 
 df_all = df_all.append(
     df_imau[
+        [
+            "date",
+            "site",
+            "latitude",
+            "longitude",
+            "elevation",
+            "depthOfTemperatureObservation",
+            "temperatureObserved",
+            "reference",
+            "reference_short",
+            "note",
+        ]
+    ],
+    ignore_index=True,
+)
+
+# %% Braithwaite
+df = pd.read_excel('Data/Braithwaite/data.xlsx')
+df['temperatureObserved'] = df[10].values
+df['depthOfTemperatureObservation'] = 10
+
+df[
+    "reference"
+] = "Braithwaite, R. (1993). Firn temperature and meltwater refreezing in the lower accumulation area of the Greenland ice sheet, Pâkitsoq, West Greenland. Rapport Grønlands Geologiske Undersøgelse, 159, 109–114. https://doi.org/10.34194/rapggu.v159.8218"
+df["reference_short"] = "Braithwaite (1993)"
+df["note"] = "digitized"
+
+df_all = df_all.append(
+    df[
+        [
+            "date",
+            "site",
+            "latitude",
+            "longitude",
+            "elevation",
+            "depthOfTemperatureObservation",
+            "temperatureObserved",
+            "reference",
+            "reference_short",
+            "note",
+        ]
+    ],
+    ignore_index=True,
+)
+
+# %% Clement
+df = pd.read_excel('Data/Clement/data.xlsx')
+df['depthOfTemperatureObservation'] = df.depth
+df['temperatureObserved'] = df.temperature
+
+df[
+    "reference"
+] = "Clement, P. “Glaciological Activities in the Johan Dahl Land Area, South Greenland, As a Basis for Mapping Hydropower Potential”. Rapport Grønlands Geologiske Undersøgelse, vol. 120, Dec. 1984, pp. 113-21, doi:10.34194/rapggu.v120.7870."
+df["reference_short"] = "Clement (1984)"
+df["note"] = "digitized"
+
+df_all = df_all.append(
+    df[
+        [
+            "date",
+            "site",
+            "latitude",
+            "longitude",
+            "elevation",
+            "depthOfTemperatureObservation",
+            "temperatureObserved",
+            "reference",
+            "reference_short",
+            "note",
+        ]
+    ],
+    ignore_index=True,
+)
+
+# %% Nobles
+df = pd.read_excel('Data/Nobles Nuna Ramp/data.xlsx')
+df['depthOfTemperatureObservation'] = 10
+df['temperatureObserved'] = df['annual temp at 8m']
+df['date'] = pd.to_datetime('1954-07-01')
+df[
+    "reference"
+] = "Nobles, L. H., Glaciological investigations, Nunatarssuaq ice ramp, Northwestern Greenland, Tech. Rep. 66, U.S. Army Snow, Ice and Permafrost Research Establishment, Corps of Engineers, 1960."
+df["reference_short"] = "Nobles (1960)"
+df["note"] = "digitized"
+
+df_all = df_all.append(
+    df[
+        [
+            "date",
+            "site",
+            "latitude",
+            "longitude",
+            "elevation",
+            "depthOfTemperatureObservation",
+            "temperatureObserved",
+            "reference",
+            "reference_short",
+            "note",
+        ]
+    ],
+    ignore_index=True,
+)
+
+# %% Schytt
+df = pd.read_excel('Data/Schytt Tuto/data.xlsx')
+df_interp = pd.DataFrame()
+
+for site in df.site.unique():
+    df_site = df.loc[df.site == site]
+    for date in df_site.date.unique():
+        df_date = df_site.loc[df_site.date==date]
+        if df_date.shape[0]<2:
+            continue
+        tmp = df_date.iloc[0, :].copy()
+
+        f = interp1d(
+            df_date["depth"].values,
+            df_date["temperatureObserved"].values,
+            fill_value="extrapolate",
+        )
+        tmp.temperatureObserved = min(f(10), 0)
+        tmp.depthOfTemperatureObservation = 10
+        tmp.note = "digitized, interpolated at 10 m"
+        df_interp = df_interp.append(tmp)
+    
+        plt.figure()
+        plt.plot(df_date.temperatureObserved,
+                  -df_date.depth,
+                  marker='o')
+        plt.plot(tmp.temperatureObserved, 
+                  -tmp.depthOfTemperatureObservation,  marker='o')
+        plt.title(tmp.site+' '+tmp.date)
+
+
+df_interp['depthOfTemperatureObservation'] = 10
+df_interp['date'] = pd.to_datetime(df_interp.date)
+df_interp[
+    "reference"
+] = "Schytt, V. (1955) Glaciological investigations in the Thule Ramp area, U. S. Army Snow Ice and Permafrost Research Establishment, Corps of Engineers, Report 28, 88 pp."
+df_interp["reference_short"] = "Schytt (1955)"
+df_interp["note"] = "from table"
+
+df_all = df_all.append(
+    df_interp[
+        [
+            "date",
+            "site",
+            "latitude",
+            "longitude",
+            "elevation",
+            "depthOfTemperatureObservation",
+            "temperatureObserved",
+            "reference",
+            "reference_short",
+            "note",
+        ]
+    ],
+    ignore_index=True,
+)
+
+# %% Griffiths & Schytt
+df = pd.read_excel('Data/Griffiths Tuto/data.xlsx')
+df_interp = pd.DataFrame()
+
+for site in df.site.unique():
+    df_site = df.loc[df.site == site]
+    for date in df_site.date.unique():
+        df_date = df_site.loc[df_site.date==date]
+        if df_date.shape[0]<2:
+            continue
+        tmp = df_date.iloc[0, :].copy()
+        if df_date["depth"].max()<8:
+            continue
+        f = interp1d(
+            df_date["depth"].values,
+            df_date["temperatureObserved"].values,
+            fill_value="extrapolate",
+        )
+        tmp.temperatureObserved = min(f(10), 0)
+        tmp.depthOfTemperatureObservation = 10
+        tmp.note = "digitized, interpolated at 10 m"
+        df_interp = df_interp.append(tmp)
+    
+        plt.figure()
+        plt.plot(df_date.temperatureObserved,
+                  -df_date.depth,
+                  marker='o')
+        plt.plot(tmp.temperatureObserved, 
+                  -tmp.depthOfTemperatureObservation,  marker='o')
+        plt.title(tmp.site+' '+tmp.date)
+
+df_interp['depthOfTemperatureObservation'] = 10
+df_interp['date'] = pd.to_datetime(df_interp.date)
+df_interp[
+    "reference"
+] = "Griffiths, T. M. (1960). Glaciological investigations in the TUTO area of Greenland., U. S. Army Snow Ice and Permafrost Research Establishment, Corps of Engineers, Report 47, 62 pp."
+df_interp["reference_short"] = "Griffiths (1960)"
+df_interp["note"] = "from table"
+
+df_all = df_all.append(
+    df_interp[
+        [
+            "date",
+            "site",
+            "latitude",
+            "longitude",
+            "elevation",
+            "depthOfTemperatureObservation",
+            "temperatureObserved",
+            "reference",
+            "reference_short",
+            "note",
+        ]
+    ],
+    ignore_index=True,
+)
+
+# %% Griffiths & Meier
+df = pd.read_excel('Data/Griffiths Tuto/data_crevasse3.xlsx')
+df_interp = pd.DataFrame()
+
+for site in df.site.unique():
+    df_site = df.loc[df.site == site]
+    for date in df_site.date.unique():
+        df_date = df_site.loc[df_site.date==date]
+        if df_date.shape[0]<2:
+            continue
+        tmp = df_date.iloc[0, :].copy()
+        if df_date["depth"].max()<8:
+            continue
+        f = interp1d(
+            df_date["depth"].values,
+            df_date["temperatureObserved"].values,
+            fill_value="extrapolate",
+        )
+        tmp.temperatureObserved = min(f(10), 0)
+        tmp.depthOfTemperatureObservation = 10
+        tmp.note = "digitized, interpolated at 10 m"
+        df_interp = df_interp.append(tmp)
+    
+        plt.figure()
+        plt.plot(df_date.temperatureObserved,
+                  -df_date.depth,
+                  marker='o')
+        plt.plot(tmp.temperatureObserved, 
+                  -tmp.depthOfTemperatureObservation,  marker='o')
+        plt.title(tmp.site+' '+tmp.date)
+
+df_interp['depthOfTemperatureObservation'] = 10
+df_interp['date'] = pd.to_datetime(df_interp.date)
+df_interp[
+    "reference"
+] = "Griffiths, T. M. (1960). Glaciological investigations in the TUTO area of Greenland., U. S. Army Snow Ice and Permafrost Research Establishment, Corps of Engineers, Report 47, 62 pp. and Meier, M. F., Conel, J. E., Hoerni, J. A., Melbourne, W. G., & Pings, C. J. (1957). Preliminary Study of Crevasse Formation. Blue Ice Valley, Greenland, 1955. OCCIDENTAL COLL LOS ANGELES CALIF."
+df_interp["reference_short"] = "Griffiths (1960)"
+
+df_interp["latitude"] = 76.43164
+df_interp["longitude"] = -67.54949
+df_interp["elevation"] = 800
+
+#only keeping measurements more than 1 m into the crevasse wall
+df_interp = df_interp.loc[df_interp['distance from crevasse'] >= 1,:]
+df_all = df_all.append(
+    df_interp[
+        [
+            "date",
+            "site",
+            "latitude",
+            "longitude",
+            "elevation",
+            "depthOfTemperatureObservation",
+            "temperatureObserved",
+            "reference",
+            "reference_short",
+            "note",
+        ]
+    ],
+    ignore_index=True,
+)
+
+
+# %% Vanderveen
+df = pd.read_excel('Data/Vanderveen et al. 2001/summary.xlsx')
+df = df.loc[df.date1.notnull(), :]
+df = df.loc[df.Temperature_celsius.notnull(), :]
+df['site'] = [str(s) for s in df.site]
+df['date'] = pd.to_datetime(df.date1) + (pd.to_datetime(df.date2)-pd.to_datetime(df.date1))/2
+df['note'] = ''
+df.loc[np.isnan(df['date']),'note'] = 'only year available'
+df.loc[np.isnan(df['date']),'date'] = pd.to_datetime([str(y)+'-07-01' for y in df.loc[np.isnan(df['date']),'date1'].values])
+
+df['temperatureObserved'] = df['Temperature_celsius']
+df['depthOfTemperatureObservation'] = df['Depth_centimetre']/100
+tmp, ind = np.unique([str(x)+str(y) for (x,y) in zip(df.site, df.date)],
+                      return_inverse = True)
+df_interp = pd.DataFrame()
+for i in np.unique(ind):
+    core_df = df.loc[ind==i,:]
+    if core_df['depthOfTemperatureObservation'].max()<9:
+        continue
+    if core_df['depthOfTemperatureObservation'].min()>11:
+        continue
+    if len(core_df['depthOfTemperatureObservation'])<2:
+        continue
+    # # if core_df.site.unique() in [
+    # print(core_df.site.unique() )
+    tmp = core_df.iloc[0, :].copy()
+    f = interp1d(
+        np.log(core_df["depthOfTemperatureObservation"].values),
+        core_df["temperatureObserved"].values,
+        fill_value="extrapolate",
+    )
+    tmp.temperatureObserved = f(np.log(10))
+    tmp.depthOfTemperatureObservation = 10
+    tmp.note = "digitized, interpolated at 10 m"
+    df_interp = df_interp.append(tmp)
+    
+    plt.figure()
+    plt.plot((core_df.temperatureObserved),
+              -(core_df.depthOfTemperatureObservation),
+              marker='o', linestyle='None')
+    plt.plot(tmp.temperatureObserved, 
+              -tmp.depthOfTemperatureObservation,  marker='o')
+    x = np.arange(0,20,0.1)
+    plt.plot(f(np.log(x)),-x)
+    plt.title(tmp.site)
+    
+    # core_df  = interp_pandas(core_df)
+df = df.append(df_interp)
+
+df['reference'] = 'van der Veen, C. J., Mosley-Thompson, E., Jezek, K. C., Whillans, I. M., and Bolzan, J. F.: Accumulation rates in South and Central Greenland, Polar Geography, 25, 79–162, https://doi.org/10.1080/10889370109377709, 2001.'
+df['reference_short'] = 'van der Veen et al. (2001)'
+
+df_all = df_all.append(
+    df[
+        [
+            "date",
+            "site",
+            "latitude",
+            "longitude",
+            "elevation",
+            "depthOfTemperatureObservation",
+            "temperatureObserved",
+            "reference",
+            "reference_short",
+            "note",
+        ]
+    ],
+    ignore_index=True,
+)
+
+# %% Koch Wegener 1913
+df = pd.read_excel('Data/Koch Wegener/data.xlsx')
+
+df['depthOfTemperatureObservation'] = 10
+df['date'] = pd.to_datetime(df.date)
+df[
+    "reference"
+] = "Koch, Johann P., and Alfred Wegener. Wissenschaftliche Ergebnisse Der Dänischen Expedition Nach Dronning Louises-Land Und Quer über Das Inlandeis Von Nordgrönland 1912 - 13 Unter Leitung Von Hauptmann J. P. Koch : 1 (1930). 1930."
+df["reference_short"] = "Koch (1913)"
+df["site"] = "Koch 1912-13 winter camp"
+
+df_all = df_all.append(
+    df[
         [
             "date",
             "site",
@@ -2113,8 +2414,6 @@ df.loc[df.site.isnull(),'site'] = ['unnamed '+str(i) for i in df.loc[df.site.isn
 
 df_m = pd.DataFrame()
 # generating the monthly file
-
-
 for ref in df.reference_short.unique():
     for site in df.loc[df.reference_short == ref,'site'].unique():
         df_loc = df.loc[(df.reference_short == ref)&(df.site == site),:].copy()

@@ -25,6 +25,50 @@ from rasterio.crs import CRS
 from  scipy import stats, signal #Required for detrending data and computing regression
 import statsmodels.api as sm
 
+
+df = pd.read_csv("10m_temperature_dataset_monthly.csv")
+
+# ============ To fix ================
+
+df_ambiguous_date = df.loc[pd.to_datetime(df.date, errors="coerce").isnull(), :]
+df = df.loc[~pd.to_datetime(df.date, errors="coerce").isnull(), :]
+
+df_bad_long = df.loc[df.longitude > 0, :]
+df["longitude"] = -df.longitude.abs().values
+
+df_no_coord = df.loc[np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
+df = df.loc[~np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
+
+df_invalid_depth = df.loc[
+    pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
+]
+df = df.loc[
+    ~pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
+]
+
+df_no_elev = df.loc[df.elevation.isnull(), :]
+df = df.loc[~df.elevation.isnull(), :]
+
+df["year"] = pd.DatetimeIndex(df.date).year
+
+gdf = (
+    gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.longitude, df.latitude))
+    .set_crs(4326)
+    .to_crs(3413)
+)
+
+land = gpd.GeoDataFrame.from_file("Data/misc/Ice-free_GEUS_GIMP.shp")
+land = land.to_crs("EPSG:3413")
+
+ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
+ice = ice.to_crs("EPSG:3413")
+
+dates = pd.DatetimeIndex(df.date)
+
+years = pd.DatetimeIndex(dates).year.unique().values
+years.sort()
+df = df.reset_index(drop=True)
+
 def toYearFraction(date):
     year = date.year
     startOfThisYear = dt(year=year, month=1, day=1)
@@ -41,7 +85,10 @@ land = land.to_crs("EPSG:3413")
 ds = xr.open_dataset("C:/Data_save/RCM/RACMO/FDM_T10m_FGRN055_1957-2020_GrIS_GIC.nc")
 
 ds_month = ds.resample(time = 'M').mean()
+ds_month_latlon = ds_month.set_coords(['lat','lon'])
 
+ds_T10m = xr.open_dataset('predicted_T10m.nc')
+T10m_GrIS_p = (ds_T10m.mean(dim=('latitude','longitude'))).to_pandas()
 
 
 def calculate_trend(ds_month, year_start,year_end):
@@ -134,7 +181,9 @@ fig.savefig( 'figures/RACMO_trend_map.png',dpi=300)
 # %% 
 fig, ax_bot = plt.subplots(1,1)
 ax_bot.set_title(ABC[0]+'. Ice-sheet-wide average',fontweight = 'bold')
-T10m_GrIS.plot()
+T10m_GrIS.plot(ax=ax_bot)
+T10m_GrIS_p.plot(ax=ax_bot)
+
 for r in range(4):
     tmp = T10m_GrIS.loc[str (year_ranges[r,0]):str (year_ranges[r,1])]
     X = np.array([toYearFraction(d) for d in tmp.index])
@@ -155,30 +204,25 @@ for r in range(4):
                 linestyle=linestyle)
     print('slope (p-value): %0.3f (%0.3f)'% (est2.params[1], est2.pvalues[1]))
     
-    
+ # %% 
+
+df = df.sort_values('date')
+df['date'] = pd.to_datetime(df.date)
+
+ds_month_latlon = ds_month.rio.reproject("EPSG:4326")
+ds_month_latlon['T10m'] = xr.where(ds_month_latlon['T10m']>=0, ds_month_latlon['T10m'], 0)   
 
 # %% checking that the trends match with the ones calculated at the clusters
-cluster_loc = [['CP1', [251, 136]],
-    ['T1', [249, 128]],
-    ['DYE-2', [182, 131]],
-    ['Camp Century', [412,  99]],
-    ['Crête', [270, 202]],
-    ['SwissCamp', [247, 119]],
-    ['Summit', [299, 195]],
-    ['KAN-U', [194, 127]],
-    ['SouthDome', [115, 134]],
-    ['NASA-SE', [179, 161]],
-    ['NASA-U', [331, 134]],
-    ['Saddle', [171, 144]]]
+cluster_list = ['CP1', 'DYE-2', 'Camp Century', 'SwissCamp',
+               'Summit',  'KAN-U', 'SouthDome', 'NASA-SE',  'NASA-U', 'Saddle']
 
-for i in range(12):
-    print(cluster_loc[i][0],
-          '\n%0.3f \n%0.3f \n%0.3f \n%0.3f'% tuple([ds_month['trend_'+str(t)][dict(rlon=int(cluster_loc[i][1][1]),
-                                                rlat=int(cluster_loc[i][1][0]))].values.tolist() for t in range(4)]))
+for site in cluster_list:
+    tmp = df.loc[df.site==site]
     
-for i in range(12):
-    print(cluster_loc[i][0],
-          ' %0.3f %0.3f'% tuple([ds_month[var][dict(time = 0,
-                                              rlon=int(cluster_loc[i][1][1]),
-                                              rlat=int(cluster_loc[i][1][0]))].values.tolist() for var in ['lat', 'lon']]))
-    
+    plt.figure()
+    (ds_month_latlon.T10m.sel(x=tmp.iloc[0,:].longitude,
+                              y=tmp.iloc[0,:].latitude, method = 'nearest').to_dataframe().T10m-273.15).plot()
+    ds_T10m.sel(longitude = tmp.iloc[0,:].longitude,
+                latitude = tmp.iloc[0,:].latitude, method = 'nearest').to_dataframe().T10m.plot()
+    tmp.set_index('date').temperatureObserved.plot(linestyle='None',marker='o',markersize=5)
+    plt.title(site)

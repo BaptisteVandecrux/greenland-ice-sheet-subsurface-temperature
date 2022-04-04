@@ -23,7 +23,6 @@ np.seterr(invalid="ignore")
 
 #%% Adding PROMICE observations
 # Array information of stations available at PROMICE official site: https://promice.org/WeatherStations.html
-pd.read_csv
 PROMICE_stations = pd.read_csv('Data/PROMICE/PROMICE_coordinates_2015.csv', sep=';')
 
 # removing stations that are outside of the ice sheet
@@ -39,14 +38,13 @@ for ws in PROMICE_stations:
 
     df = (
         pd.read_csv(filepath, sep="\t", index_col=0, parse_dates=True, na_values=-999)
-        .resample("D")
-        .mean()
     )
     df = df[
         [
             "Year",
             "MonthOfYear",
             "DayOfYear",
+            'HourOfDay(UTC)',
             "AirTemperature(C)",
             "AirTemperatureHygroClip(C)",
             "SurfaceTemperature(C)",
@@ -73,6 +71,7 @@ PROMICE.rename(
     columns={
         "Year": "year",
         "DayOfYear": "dayofyear",
+        'HourOfDay(UTC)': "hourUTC",
         "IceTemperature1(C)": "rtd0",
         "IceTemperature2(C)": "rtd1",
         "IceTemperature3(C)": "rtd2",
@@ -87,9 +86,9 @@ PROMICE.rename(
 )
 PROMICE["date"] = (np.asarray(PROMICE["year"], dtype="datetime64[Y]") - 1970) + (
     np.asarray(PROMICE["dayofyear"], dtype="timedelta64[D]") - 1
-)
+) +  np.asarray(PROMICE["hourUTC"], dtype="timedelta64[h]")
 
-PROMICE.drop(["year", "MonthOfYear", "dayofyear"], axis=1, inplace=True)
+PROMICE.drop(["year", "MonthOfYear", "dayofyear", "hourUTC"], axis=1, inplace=True)
 PROMICE.set_index(["sitename", "date"], inplace=True)
 PROMICE.replace(to_replace=-999, value=np.nan, inplace=True)
 sites_all = [item[0] for item in PROMICE_stations]
@@ -190,6 +189,8 @@ for site in sites_all:
     temp_cols_name = ["rtd0", "rtd1", "rtd2", "rtd3", "rtd4", "rtd5", "rtd6", "rtd7"]
     for i in range(8):
         tmp = PROMICE.loc[site, "rtd" + str(i)].copy()
+        plt.figure()
+        PROMICE.loc[site, "rtd" + str(i)].plot()
         # variance filter
         ind_filter = (
             PROMICE.loc[site, "rtd" + str(i)]
@@ -226,11 +227,16 @@ for site in sites_all:
         ind_pos = PROMICE.loc[site, "depth_" + str(i)] < 0.1
         if any(ind_pos):
             tmp.loc[ind_pos] = np.nan
-
+        tmp.plot()
         # porting the filtered values to the original table
         PROMICE.loc[site, "rtd" + str(i)] = tmp.values
         # PROMICE.loc[site,'rtd'+str(i)] = PROMICE.loc[site,'rtd'+str(i)].interpolate(limit=14).values
 
+# PROMICE.to_csv('KAN_U_PROMICE_thermistor.csv')
+ 
+# plt.figure()
+# for i in range(1,9):
+#     df['IceTemperature'+str(i)+'(C)'].plot()
 # %% 10 m firn temp
 df_PROMICE = pd.DataFrame()
 import firn_temp_lib as ftl

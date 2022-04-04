@@ -1,7 +1,0 @@
-To do:
-TAS-A remove maintenance in 2016
-THU_L surface height
-QAS_L surface height
-NUK_U surface height
-KAN_L surface height
-right adjustment FirnCover

@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 import sys
 import firn_temp_lib as ftl
-from sklearn.linear_model import LinearRegression
+# from sklearn.linear_model import LinearRegression
 
 # %% Old GC-Net stations not processed in Vandecrux et al. 2020
 meta = pd.read_csv("Data/GC-Net/Gc-net_documentation_Nov_10_2000.csv")
@@ -166,13 +166,20 @@ df_gcn.to_csv("Data/GC-Net/10m_firn_temperature.csv")
 # %% New GC-Net stations
 meta = pd.read_csv("Data/GCNv2/metadata.txt", sep="\t")
 df_gcn2 = pd.DataFrame()
+import shutil
 
-for site in [meta.site_short[7]]: #meta.site_short: # 
+for site in meta.site_short: # 
     print(site)
     if site in ["JAR", "CEN2"]:
         print("no thermistor string intalled")
         continue
     IMEI = meta.loc[meta.site_short == site, "IMEI"].values[0]
+    # break
+    # trying to copy most recent files:
+    try:
+        shutil.copyfile('G:/test/aws_data/AWS_'+str(IMEI)+'.txt', "Data/GCNv2")
+    
+        
 
     cols = [ "time", "counter", "Pressure_L", "Pressure_U", "Asp_temp_L", "Asp_temp_U","Humidity_L", "Humidity_U", "WindSpeed_L", "WindDirection_L", "WindSpeed_U","WindDirection_U", "SWUpper", "SWLower", "LWUpper", "LWLower","TemperatureRadSensor","SR1", "SR2", "thermistorstring_1", "thermistorstring_2","thermistorstring_3", "thermistorstring_4", "thermistorstring_5","thermistorstring_6", "thermistorstring_7", "thermistorstring_8","thermistorstring_9", "thermistorstring_10", "thermistorstring_11", "Roll","Pitch", "Heading", "Rain_amount_L", "Rain_amount_U", "Gtime", "latitude", "longitude","altitude", "HDOP", "FanCurrent_L", "FanCurrent_U", "BattVolt", "PressureMinus1000_L","Asp_temp_L2", "Humidity_L", "WindSpeed_S_L", "WindDirection_S_L", "?" ]
 

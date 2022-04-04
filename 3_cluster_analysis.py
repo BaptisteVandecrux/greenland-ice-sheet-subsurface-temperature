@@ -27,7 +27,7 @@ import time
 # T = A*np.exp(-z * np.sqrt(om/2/kappa) * np.cos(om*t - z*np.sqrt(om/2/kappa) + eps)
 
 # %% Studying clusters
-df = pd.read_csv("subsurface_temperature_summary.csv")
+df = pd.read_csv("10m_temperature_dataset_monthly.csv")
 import geopandas as gpd
 
 # ============ To fix ================
@@ -178,7 +178,7 @@ handles = list()
 labels = list()
 import matplotlib.dates as mdates
 
-for cluster_id in unique_labels:
+for cluster_id in [7]: #unique_labels:
     if cluster_id == -1:
         continue
 
@@ -187,7 +187,7 @@ for cluster_id in unique_labels:
     if len(ref_list) > 1:
         # if np.nanmax(tmp.year)-np.nanmin(tmp.year) < 5:
         #     continue
-        print(cluster_id, tmp.site.unique()[-1], np.nanmin(tmp.year), np.nanmax(tmp.year))
+        print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year))
 
         # i = i+1
         fig, ax = plt.subplots(1,1, figsize=(20, 20))
@@ -205,9 +205,9 @@ for cluster_id in unique_labels:
                 ax=ax[i], marker="o", markersize=6, linestyle="none", label=ref )
             
 
+        ax[i].set_ylabel('Temperature 10 m below the surface ($^oC$)')
         ax[i].set_xlabel('')
         ax[i].set_title(str(np.unique(tmp.site)))
-        ax[i].set_ylabel("")
         ax[i].legend()
 
     # if i not in [12, 13, 14]:
