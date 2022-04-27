@@ -173,12 +173,16 @@ for site in meta.site_short: #
     if site in ["JAR", "CEN2"]:
         print("no thermistor string intalled")
         continue
+    if site in ["SDL"]:
+        print("no thermistor string intalled")
+        continue
     IMEI = meta.loc[meta.site_short == site, "IMEI"].values[0]
     # break
     # trying to copy most recent files:
     try:
-        shutil.copyfile('G:/test/aws_data/AWS_'+str(IMEI)+'.txt', "Data/GCNv2")
-    
+        shutil.copyfile('G:/test/aws_data/AWS_'+str(IMEI)+'.txt', 'Data/GCNv2/AWS_'+str(IMEI)+'.txt')
+    except: 
+        print('cannot copy latest file, using local file instead')    
         
 
     cols = [ "time", "counter", "Pressure_L", "Pressure_U", "Asp_temp_L", "Asp_temp_U","Humidity_L", "Humidity_U", "WindSpeed_L", "WindDirection_L", "WindSpeed_U","WindDirection_U", "SWUpper", "SWLower", "LWUpper", "LWLower","TemperatureRadSensor","SR1", "SR2", "thermistorstring_1", "thermistorstring_2","thermistorstring_3", "thermistorstring_4", "thermistorstring_5","thermistorstring_6", "thermistorstring_7", "thermistorstring_8","thermistorstring_9", "thermistorstring_10", "thermistorstring_11", "Roll","Pitch", "Heading", "Rain_amount_L", "Rain_amount_U", "Gtime", "latitude", "longitude","altitude", "HDOP", "FanCurrent_L", "FanCurrent_U", "BattVolt", "PressureMinus1000_L","Asp_temp_L2", "Humidity_L", "WindSpeed_S_L", "WindDirection_S_L", "?" ]

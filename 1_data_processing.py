@@ -411,6 +411,8 @@ print("Loading PROMICE")
 df_promice = pd.read_csv("Data/PROMICE/PROMICE_10m_firn_temperature.csv", sep=";")
 df_promice = df_promice.loc[df_promice.temperatureObserved.notnull()]
 df_promice["reference_short"] = "PROMICE"
+df_promice = df_promice.loc[df_promice.site!='QAS_A',:]
+df_promice.loc[(df_promice.site=='CEN') & (df_promice.temperatureObserved>-18),'temperatureObserved'] = np.nan
 df_all = df_all.append(
     df_promice[
         [
@@ -428,7 +430,6 @@ df_all = df_all.append(
     ],
     ignore_index=True,
 )
-
 
 # %%  GC-Net
 print("Loading GC-Net")
@@ -681,9 +682,7 @@ rtd_df = rtd_df.set_index(["sitename", "date"])
 df_firncover = pd.DataFrame()
 for site in sites:
     df_d = rtd_df.xs(site, level="sitename").reset_index()
-    
-    df_d.to_csv('FirnCover_'+site+'.csv')
-
+    # df_d.to_csv('FirnCover_'+site+'.csv')
     df_10 = ftl.interpolate_temperature(
         df_d["date"],
         df_d[["depth_" + str(i) for i in range(24)]].values,
@@ -2372,6 +2371,7 @@ df_no_coord = df_all.loc[np.logical_or(df_all.latitude.isnull(), df_all.latitude
 df_invalid_depth =  df_all.loc[pd.to_numeric(df_all.depthOfTemperatureObservation,errors='coerce').isnull(),:]
 df_no_elev =  df_all.loc[df_all.elevation.isnull(),:]
 df_no_elev.to_csv('missing_elev.csv')
+
 # %% Removing nan and saving
 tmp = df_all.loc[np.isnan(df_all.temperatureObserved.astype(float).values)]
 df_all = df_all.loc[~np.isnan(df_all.temperatureObserved.astype(float).values)]

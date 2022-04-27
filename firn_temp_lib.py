@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Aug  5 09:43:45 2020
-
+tip list:
+    %matplotlib inline
+    %matplotlib qt
+    import pdb; pdb.set_trace()
 @author: bav
 """
 import numpy as np
@@ -10,8 +13,15 @@ import tables as tb
 import progressbar
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+from datetime import datetime as dt
+from scipy.spatial import ConvexHull, convex_hull_plot_2d
+from scipy.interpolate import Rbf
+import itertools
+from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+import cartopy.crs as ccrs
+import matplotlib.ticker as mticker
+from scipy.spatial import cKDTree
 
-# interpolation function
 def interpolate_temperature(
     dates,
     depth_cor,
@@ -97,8 +107,266 @@ def interpolate_temperature(
         fig.savefig('figures/string processing/interp_'+title+'.png', dpi=300)
     return df_interp
 
+
+def toYearFraction(date):
+    year = date.year
+    startOfThisYear = dt(year=year, month=1, day=1)
+    startOfNextYear = dt(year=year+1, month=1, day=1)
+
+    yearElapsed = (date - startOfThisYear).total_seconds()
+    yearDuration = (startOfNextYear - startOfThisYear).total_seconds()
+    fraction = yearElapsed/yearDuration
+
+    return date.year + fraction
+
+
+def calculate_trend(ds_month, year_start,year_end, var, dim1, dim2):
+    ds_month = ds_month.loc[dict(time=slice(str(year_start)+"-01-01", str(year_end)+"-12-31"))]
     
-# %%
+    vals = ds_month[var].values 
+    time = np.array([toYearFraction(d) for d in pd.to_datetime(ds_month.time.values)])
+    # Reshape to an array with as many rows as years and as many columns as there are pixels
+    vals2 = vals.reshape(len(time), -1)
+    # Do a first-degree polyfit
+    regressions = np.nan * vals2[:2,:]
+    ind_nan = np.all(np.isnan(vals2),axis=0)
+    regressions[:,~ind_nan] = np.polyfit(time, vals2[:,~ind_nan], 1)
+    # Get the coefficients back
+    trends = regressions[0,:].reshape(vals.shape[1], vals.shape[2])
+    return ([dim1, dim2],  trends)
+
+
+def polyfit2d(x, y, z, W = [], order=3):
+    ncols = (order + 1)**2
+    G = np.zeros((x.size, ncols))
+    ij = itertools.product(range(order+1), range(order+1))
+    for k, (i,j) in enumerate(ij):
+        G[:,k] = x**i * y**j
+    if len(W)==0:
+        W = np.diag(z*0+1)            
+    else:
+        W = np.sqrt(np.diag(W))
+    Gw = np.dot(W,G)
+    zw = np.dot(z,W)
+    m, _, _, _ = np.linalg.lstsq(Gw, zw, rcond=None)
+    return m
+
+
+def polyval2d(x, y, m, df, limit_extrap = True):
+    order = int(np.sqrt(len(m))) - 1
+    ij = itertools.product(range(order+1), range(order+1))
+    z = np.zeros_like(x)
+    for a, (i,j) in zip(m, ij):
+        z += a * x**i * y**j
+    
+    if limit_extrap:
+        # # removing output for cells that are further than a certain 
+        # # distance from the df training set
+        s1 = np.array([[x, y/200] for x,y in zip(x.flatten(),y.flatten())])
+        s2 = np.array([[x, y/200] for x,y in zip(df.latitude.values, df.elevation.values)])
+        
+        min_dists, min_dist_idx = cKDTree(s2).query(s1, 1)
+        z = z.flatten()
+        
+        points = np.array([[x,y] for x,y in zip(df.latitude.values, df.elevation.values)])
+        points_query = np.array([[x,y] for x,y in zip(x.flatten(), y.flatten())])
+        ind_in_hull = in_hull(points_query, points)
+        msk = (~ind_in_hull) & (min_dists>1)
+        z[msk] = np.nan
+        z = np.reshape(z,x.shape)
+    return z
+
+
+def fitting_surface(df, latitude_bins, elevation_bins, xx, yy, target_var = "temperatureObserved", order = 3, limit_extrap=True):
+
+
+    grid_temp = np.empty((len(elevation_bins), len(latitude_bins)))*np.nan
+    grid_temp[:] = np.nan
+
+    for i in range(len(elevation_bins) - 1):
+        for j in range(len(latitude_bins) - 1):
+            conditions = np.array(
+                (
+                    df.elevation >= elevation_bins[i],
+                    df.elevation < elevation_bins[i + 1],
+                    df.latitude >= latitude_bins[j],
+                    df.latitude < latitude_bins[j + 1],
+                )
+            )
+            msk = np.logical_and.reduce(conditions)
+            grid_temp[i, j] = df.loc[msk, target_var].mean()
+            if df.loc[msk, "temperatureObserved"].count()==0:
+                df.loc[msk, "weight"] = 0
+            else:
+                df.loc[msk, "weight"] = 1/df.loc[msk, "temperatureObserved"].count()
+    points = np.array([[x,y] for x,y in zip(df.latitude.values, df.elevation.values)])
+    hull = ConvexHull(points)
+    
+    m = polyfit2d(df.loc[df[target_var].notnull(), 'latitude'],
+                  df.loc[df[target_var].notnull(), 'elevation'],
+                  df.loc[df[target_var].notnull(), target_var],
+                  W = df.loc[df[target_var].notnull(), 'weight'],
+                  order = order)
+    dx = np.round(np.diff(xx[0,:])[0],2)
+    dy = np.round(np.diff(yy[:,0])[0],2)
+    def interp_func(x,y):
+        return polyval2d(x, y, m, df, limit_extrap = limit_extrap)
+    zz = interp_func(xx+dx/2, yy+dy/2)
+    
+    res =  df[target_var] - interp_func(df.latitude.values, df.elevation.values)
+    return zz, res, interp_func
+
+from scipy.interpolate import griddata
+def fitting_surface_2d_interp(df, latitude_bins, elevation_bins, xx, yy, target_var = "temperatureObserved", order = 3, limit_extrap=True):
+    grid_temp = np.empty((len(elevation_bins), len(latitude_bins)))*np.nan
+    grid_temp[:] = np.nan
+    
+    for i in range(len(elevation_bins) - 1):
+        for j in range(len(latitude_bins) - 1):
+            conditions = np.array(
+                (
+                    df.elevation >= elevation_bins[i],
+                    df.elevation < elevation_bins[i + 1],
+                    df.latitude >= latitude_bins[j],
+                    df.latitude < latitude_bins[j + 1],
+                )
+            )
+            msk = np.logical_and.reduce(conditions)
+            grid_temp[i, j] = df.loc[msk, target_var].mean()
+    
+    grid_temp = grid_temp
+    x, y = np.meshgrid(latitude_bins + np.diff(latitude_bins[:2])/2,
+                        elevation_bins + np.diff(elevation_bins[:2])/2)
+    msk = ~np.isnan(grid_temp)
+    # interp_grid = griddata((x[msk], y[msk]), grid_temp[msk], (x, y), method='linear')
+    
+    fig, ax = plt.subplots(nrows=1, ncols=3)
+    ax=ax.flatten()
+    for i, method in enumerate(('nearest', 'linear', 'cubic')):
+        interp_grid = griddata((x[msk], y[msk]), grid_temp[msk], (xx, yy), method=method, rescale = True)
+        ax[i].contourf(xx, yy, interp_grid)
+        ax[i].set_title("method = '{}'".format(method))    
+        ax[i].scatter(df.latitude, df.elevation, c='gray', marker='.')
+        ax[i].scatter(x[msk], y[msk], c='k', marker='o')
+    plt.tight_layout()
+    plt.show()
+    
+    def interp_func(px,py):
+        return griddata((x[msk], y[msk]), grid_temp[msk], (px,py), method='cubic', rescale = True)
+    
+    zz = interp_func(xx, yy)
+    res =  df[target_var] - interp_func(df.latitude.values, df.elevation.values)        
+    return zz, res, interp_func
+
+
+def plot_latitude_elevation_space(ax, zz,
+                                  latitude_bins,
+                                  elevation_bins,
+                                  df = [], 
+                                  target_var = "temperatureObserved",
+                                  vmin = -35, vmax = 0,
+                                  contour_levels = [],
+                                  norm = None,
+                                  cmap ='coolwarm'):
+    dx = (latitude_bins[1] - latitude_bins[0])
+    dy = (elevation_bins[1] - elevation_bins[0])
+    extent = [latitude_bins[0], latitude_bins[-1]+dx, elevation_bins[-1]+dy, elevation_bins[0]]
+    
+    ax.set_facecolor("black")
+    im = ax.imshow(zz, extent=extent,
+                    aspect="auto", norm=norm, cmap=cmap,vmin=vmin, vmax=vmax)
+    if len(contour_levels)>0:
+        CS = ax.contour(zz, contour_levels, colors='k', origin='upper', extent=extent)
+        ax.clabel(CS, CS.levels, inline=True, fontsize=10)
+
+    # scatter residual
+    if len(df)>0:
+        sct = ax.scatter(
+            df["latitude"],
+            df["elevation"],
+            s=80,
+            c=df[target_var],
+            edgecolor="gray",
+            cmap = cmap,
+            vmin=vmin,vmax=vmax,
+            zorder=10
+        )
+    ax.set_yticks(elevation_bins)
+    ax.set_xticks(latitude_bins)
+    ax.grid()
+    ax.set_ylim(0, 3500)
+    ax.set_xlim(60, 82)
+    ax.set_ylabel("Elevation (m a.s.l.)")
+    ax.set_xlabel("Latitude ($^o$N)")
+    return im
+
+
+def plot_greenland_map(ax, T10_mod, df, 
+                       land,
+                       elev_contours,
+                       target_var = "temperatureObserved",
+                       vmin = -5, vmax = 5,
+                       colorbar_label = '',
+                       colorbar = True,
+                       norm=None,
+                       cmap = 'coolwarm'):
+    if colorbar:
+        cbar_kwargs={'label': colorbar_label, 'orientation':'vertical', 'location':'left'}
+    else:
+        cbar_kwargs={}
+    land.plot(ax=ax, zorder=0, color="black", transform = ccrs.epsg(3413))
+    
+    T10_mod.plot(ax =ax, norm=norm, cmap=cmap, add_colorbar = colorbar, 
+                 cbar_kwargs=cbar_kwargs,
+                 vmin = vmin, vmax = vmax, transform = ccrs.epsg(3413)
+                 )
+    elev_contours.plot(ax=ax, color="gray", transform = ccrs.epsg(3413))
+
+    ax.set_extent([-57, -30, 59, 84], crs=ccrs.PlateCarree())
+    ax.set_title('')
+    xticks = [-60, -40, -20]
+    yticks = [80, 70, 60]
+    gl = ax.gridlines(xlocs=xticks, ylocs=yticks,
+                      draw_labels=False, x_inline=False, y_inline=False)
+ 
+    ax.annotate('80$^o$N', (1.02, 1), xycoords = 'axes fraction', color = 'gray', fontsize=8)
+    ax.annotate('70$^o$N', (1.02, 0.49), xycoords = 'axes fraction', color = 'gray', fontsize = 8)
+    ax.annotate('60$^o$N', (1.02, 0.05), xycoords = 'axes fraction', color = 'gray', fontsize = 8)
+    ax.annotate('50$^o$W', (0.15, 1.02), xycoords = 'axes fraction', color = 'gray', fontsize = 8)
+    ax.annotate('40$^o$W', (0.38, 1.02), xycoords = 'axes fraction', color = 'gray', fontsize = 8)
+    ax.annotate('20$^o$W', (0.61, 1.02), xycoords = 'axes fraction', color = 'gray', fontsize = 8)
+    
+    if len(df)>0:
+        df.plot(
+        ax=ax,
+        column=target_var,
+        norm=norm, cmap=cmap,
+        vmin = vmin,
+        vmax = vmax,
+        markersize=30,
+        edgecolor="gray",
+        legend=False, 
+        transform = ccrs.epsg(3413)
+        )   
+    return ax
+
+
+def in_hull(p, hull):
+    """
+    Test if points in `p` are in `hull`
+
+    `p` should be a `NxK` coordinates of `N` points in `K` dimensions
+    `hull` is either a scipy.spatial.Delaunay object or the `MxK` array of the 
+    coordinates of `M` points in `K`dimensions for which Delaunay triangulation
+    will be computed
+    """
+    from scipy.spatial import Delaunay
+    if not isinstance(hull,Delaunay):
+        hull = Delaunay(hull)
+
+    return hull.find_simplex(p)>=0
+
+    
 def interp_pandas(s, kind="quadratic"):
     # A mask indicating where `s` is not null
     m = s.notna().values
@@ -118,7 +386,7 @@ def interp_pandas(s, kind="quadratic"):
     return s
 
 
-#%% Loading metadata, RTD and sonic ranger
+#% Loading metadata, RTD and sonic ranger
 def load_metadata(filepath, sites):
     CVNfile = tb.open_file(filepath, mode="r", driver="H5FD_CORE")
     datatable = CVNfile.root.FirnCover
@@ -333,7 +601,7 @@ def load_metadata(filepath, sites):
     return statmeta_df, sonic_df, rtd_df, rtd_dep, metdata_df
 
 
-#%%
+#%
 def smooth(x, window_len=14, window="hanning"):
     """smooth the data using a window with requested size.
 
@@ -392,7 +660,6 @@ def smooth(x, window_len=14, window="hanning"):
     return y[int(window_len / 2 - 1) : -int(window_len / 2)]
 
 
-#%%
 def interp_gap(data, gap_size):
     mask = data.copy()
     grp = (mask.notnull() != mask.shift().notnull()).cumsum()
@@ -404,7 +671,6 @@ def interp_gap(data, gap_size):
     return mask
 
 
-#%%
 def hampel(vals_orig, k=7, t0=3):
     """
     vals: pandas series of values from which to remove outliers

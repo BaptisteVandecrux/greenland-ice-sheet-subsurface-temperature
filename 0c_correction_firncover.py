@@ -53,18 +53,8 @@ rtd_df = rtd_df.set_index(["sitename", "date"])
 site = 'DYE-2'
 
 df_firncover = rtd_df.xs(site, level="sitename")
-# for site in sites:
-#     plt.figure()
-#     sonic_df.xs(site, level="sitename").sonic_m.plot(marker='x')
 
-#     sonic = metdata_df.loc[metdata_df.sitename==site,
-#         ["sitename", "date", "sonic_range_dist_corrected_m"]].set_index('date')
-#     sonic.loc[sonic.sonic_range_dist_corrected_m<-99,"sonic_range_dist_corrected_m"]=np.nan
-#     sonic.sonic_range_dist_corrected_m.plot(marker='o')
-#     plt.title(site)
-# %
 # Achim Dye-2
-
 print("Loading Achim Dye-2")
 time.sleep(0.2)
 
@@ -248,23 +238,33 @@ source = np.append(source,  df_samira["temp_"+str(i)].values*0+1)
 z = np.polyfit(X, Y, 1)
 p = np.poly1d(z)
 
-plt.figure()
-plt.scatter(X,Y,90,source)
-plt.plot([-18, 2],[-18, 2])
-plt.plot(np.arange(-18,2,0.5), p(np.arange(-18,2,0.5)))
-plt.xlabel('FirnCover')
-plt.ylabel('Samira or Achims measurements')
-plt.tight_layout()
+fig, ax = plt.subplots(1,2)
+ax[0].plot(X,Y,'o',linestyle = 'None',color = 'k')
+ax[0].plot([-18, 2],[-18, 2],color = 'r',label = '1:1 line')
+ax[0].plot(np.arange(-18,2,0.5), p(np.arange(-18,2,0.5)), label = 'correction function')
+ax[0].set_xlabel('FirnCover temperatures ($^o$C)')
+ax[0].set_ylabel('Reference temperatures ($^o$C)')
+ax[0].set_xlim(-18, 2)
+ax[0].set_ylim(-18, 2)
+ax[0].legend()
+ax[0].set_title('before correction')
+ax[0].annotate('ME = %0.2f\nRMSE = %0.2f' % (np.mean(X-Y), 
+                                             np.sqrt(np.mean((X-Y)**2))),
+               (-16,-2.5))
 
-# correction function p = np.poly1d([-0.00070299, -0.02370131, -0.24157552,  0.35259851, -0.3476354 ])
-
+print(z)
+# [ 1.03093649 -0.49950273]
 # after correction
-plt.figure()
-plt.scatter(p(X),Y,90,source)
-plt.plot([-18, 2],[-18, 2])
-# plt.plot(np.arange(-18,2,0.5), p(np.arange(-18,2,0.5)))
-plt.xlabel('FirnCover')
-plt.ylabel('Samira or Achims measurements')
+ax[1].plot(p(X),Y,'o',linestyle = 'None',color = 'k')
+ax[1].plot([-18, 2],[-18, 2],color = 'r')
+ax[1].set_xlabel('FirnCover temperatures ($^o$C)')
+ax[1].set_ylabel('Reference temperatures ($^o$C)')
+ax[1].set_xlim(-18, 2)
+ax[1].set_ylim(-18, 2)
+ax[1].set_title('after correction')
+ax[1].annotate('ME = %0.2f\nRMSE = %0.2f' % (np.round(np.mean(p(X)-Y),2), 
+                                             np.sqrt(np.mean((p(X)-Y)**2))),
+               (-16,-2.5))
 plt.tight_layout()
 # %%
 plt.close('all')
