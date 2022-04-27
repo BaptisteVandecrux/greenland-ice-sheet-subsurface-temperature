@@ -74,9 +74,18 @@ for i in range(6):
 df['time_era'] = np.nan
 df['t2m_amp'] = np.nan
 
+coords_uni = np.unique(df[['latitude','longitude']].values, axis=0)
+print('interpolating ERAat the observation sites')
+x = xr.DataArray(coords_uni[:,0],dims='points')
+y = xr.DataArray(coords_uni[:,1],dims='points')
+ds_interp = ds_era.interp(latitude=x, longitude=y, method="linear")
+
 for i in progressbar.progressbar(range(df.shape[0])):
-    tmp = ds_era.sel(latitude = df.iloc[i,:].latitude, 
-                  longitude = df.iloc[i,:].longitude, method= 'nearest')
+    query_point = (df.iloc[i,:].latitude,  df.iloc[i,:].longitude)
+    index_point = np.where((coords_uni ==  query_point).all(axis=1))[0][0]
+    tmp = ds_interp.isel(points = index_point)
+    if ((tmp.latitude.values, tmp.longitude.values) != query_point):
+        print('whf')
     for k in range(6):
         if (pd.to_datetime(df.iloc[i,:].date) +  pd.DateOffset(years=0-k)) < tmp.time.min():
             continue
@@ -243,7 +252,7 @@ produce_input_grid = 0
 
 if produce_input_grid:
     print('Initializing array')
-    for pred in Predictors[1:]:
+    for pred in Predictors:
         print(pred)
         ds_era[pred] = ds_era.t2m*np.nan
     for k in range(6):
@@ -257,8 +266,10 @@ if produce_input_grid:
             time_end = pd.to_datetime(time) +  pd.DateOffset(years=0-k) +  pd.DateOffset(days=-1)
             time_start = pd.to_datetime(time) +  pd.DateOffset(years=-1-k) 
             tmp = ds_era.sel(time=slice(time_start.values[0], time_end.values[0]))
+            if tmp.t2m.shape[0] == 0:
+                continue
             if k == 0:
-                ds_era['t2m_amp'].loc[dict(time=time)] = tmp.t2m.max(dim = 'time').values - tmp.t2m.min(dim = 'time').values
+                ds_era['t2m_amp'].loc[dict(time=time)] = tmp.t2m.mean(dim = 'time').values - tmp.t2m.min(dim = 'time').values
             ds_era['t2m_'+str(k)].loc[dict(time=time)] = tmp.t2m.mean(dim = 'time').values
             ds_era['sf_'+str(k)].loc[dict(time=time)] = tmp.sf.sum(dim = 'time').values
             
@@ -473,7 +484,7 @@ for i in range(4):
 ax_bot = fig.add_axes([0.2, 0.85, 0.75, 0.12])
 ax_bot.set_title(ABC[0]+'. Ice-sheet-wide average',fontweight = 'bold')
 ax_bot.plot(T10m_GrIS.index, T10m_GrIS,color='lightgray')
-ax_bot.plot(T10m_GrIS_y.index, T10m_GrIS_y)
+ax_bot.step(T10m_GrIS_y.index, T10m_GrIS_y)
 
 for r in range(4):
     tmp = T10m_GrIS_y.loc[str(year_ranges[r,0]):str (year_ranges[r,1])]
