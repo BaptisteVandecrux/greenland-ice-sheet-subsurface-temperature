@@ -18,7 +18,7 @@ import firn_temp_lib as ftl
 import time
 import xarray as xr
 import time
-
+import geopandas as gpd
 
 df = pd.read_csv("10m_temperature_dataset_monthly.csv")
 
@@ -51,11 +51,11 @@ gdf = (
     .to_crs(3413)
 )
 
-land = gpd.GeoDataFrame.from_file("Data/misc/Ice-free_GEUS_GIMP.shp")
-land = land.to_crs("EPSG:3413")
+# land = gpd.GeoDataFrame.from_file("Data/misc/Ice-free_GEUS_GIMP.shp")
+# land = land.to_crs("EPSG:3413")
 
-ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
-ice = ice.to_crs("EPSG:3413")
+# ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
+# ice = ice.to_crs("EPSG:3413")
 
 dates = pd.DatetimeIndex(df.date)
 
@@ -134,7 +134,91 @@ melt_mar_yr = xr.where(ds_mar.isel(TIME=0)['MSK']>75, ds_mar['ME'].resample(TIME
 T10m_mar_yr.isel(TIME=1).plot()
 melt_mar_yr.isel(TIME=1).plot()
 
-#%%
+# %% Extracting closest cell in MAR
+from scipy.spatial.distance import cdist
+import progressbar
+print("Extracting closest cell in MAR")
+ds = xr.open_dataset( "C:/Data_save/RCM/MAR/MARv3.12.0.4 fixed/MARv3.12.0.4-ERA5-20km-" + str(1980) + ".nc" )
+
+points = [
+    (x, y) for x, y in zip(ds["LAT"].values.flatten(), ds["LON"].values.flatten())
+]
+
+df["MAR_distance"] = np.nan
+df["MAR_lat"] = np.nan
+df["MAR_lon"] = np.nan
+df["MAR_i"] = np.nan
+df["MAR_j"] = np.nan
+df["MAR_elevation"] = np.nan
+lat_prev = -999
+lon_prev = -999
+for i, (lat, lon) in progressbar.progressbar(enumerate(zip(df.latitude, df.longitude))):
+    if lat == lat_prev and lon == lon_prev:
+        df.iloc[i, df.columns.get_loc("MAR_lat")] = df.iloc[
+            i - 1, df.columns.get_loc("MAR_lat")
+        ]
+        df.iloc[i, df.columns.get_loc("MAR_lon")] = df.iloc[
+            i - 1, df.columns.get_loc("MAR_lon")
+        ]
+        df.iloc[i, df.columns.get_loc("MAR_distance")] = df.iloc[
+            i - 1, df.columns.get_loc("MAR_distance")
+        ]
+        df.iloc[i, df.columns.get_loc("MAR_i")] = df.iloc[
+            i - 1, df.columns.get_loc("MAR_i")
+        ]
+        df.iloc[i, df.columns.get_loc("MAR_j")] = df.iloc[
+            i - 1, df.columns.get_loc("MAR_j")
+        ]
+        df.iloc[i, df.columns.get_loc("MAR_elevation")] = df.iloc[
+            i - 1, df.columns.get_loc("MAR_elevation")
+        ]
+    else:
+        closest = points[cdist([(lat, lon)], points).argmin()]
+        df.iloc[i, df.columns.get_loc("MAR_lat")] = closest[0]
+        df.iloc[i, df.columns.get_loc("MAR_lon")] = closest[1]
+        df.iloc[i, df.columns.get_loc("MAR_distance")] = cdist([(lon, lat)], [closest])[
+            0
+        ][0]
+
+        tmp = np.array(ds.SH)
+        ind = np.argwhere(
+            np.array(np.logical_and(ds["LAT"] == closest[0], ds["LON"] == closest[1]))
+        )[0]
+        df.iloc[i, df.columns.get_loc("MAR_i")] = ind[0]
+        df.iloc[i, df.columns.get_loc("MAR_j")] = ind[1]
+
+        df.iloc[i, df.columns.get_loc("MAR_elevation")] = np.array(ds.SH)[
+            ind[0], ind[1]
+        ]
+        lat_prev = lat
+        lon_prev = lon
+
+    # plt.figure()
+    # plt.scatter(ds['LON'].values.flatten(), ds['LAT'].values.flatten())
+    # plt.plot(lon,lat, marker='o',markersize=10,color='green')
+    # plt.plot(np.array(ds.LON)[ind[0], ind[1]],np.array(ds.LAT)[ind[0], ind[1]], marker='o',markersize=10,color='red')
+    # plt.plot(closest[1],closest[0], marker='o',markersize=5)
+    # break
+
+    # date_in_days_since = (pd.to_datetime(date) - pd.to_datetime('01-SEP-1947 00:00:00')).days + (pd.to_datetime(date) - pd.to_datetime('01-SEP-1947 00:00:00')).seconds/60/60/24
+    
+# %% Extracting temperatures from MAR
+print("Extracting melt from MAR")
+df["MAR_ME"] = np.nan
+ds_ME = xr.open_dataset("C:/Data_save/RCM/MAR/MARv3.12.0.4 fixed/MARv3.12.0.4-ERA5-20km-ME-1980-2021.nc")
+
+for ind in progressbar.progressbar(df.index):
+    if df.loc[ind,'date'].year<1985:
+        continue
+
+    tmp = ds_ME[dict(X10_85=int(df.loc[ind].MAR_j),
+                    Y20_155=int(df.loc[ind].MAR_i))]
+    time_start = tmp.sel(time = pd.to_datetime(df.loc[ind,'date']) +  pd.DateOffset(years=-5), method='ffill').time.values
+    time_end = tmp.sel(time = pd.to_datetime(df.iloc[i,:].date) +  pd.DateOffset(days=1), method='ffill').time.values
+    
+    df.loc[ind, 'MAR_ME'] = tmp.sel(time=slice(time_start, time_end)).ME.mean().values 
+
+# %% 
 import numpy as np
 from scipy.optimize import least_squares
 from scipy.optimize import curve_fit
@@ -164,20 +248,38 @@ x = x_sort[ind_no_nan]
 y = y_sort[ind_no_nan]
 
 res = least_squares(residuals, params, args=(x, y))
+x_obs = df.temperatureObserved[df.temperatureObserved.notnull()&df.MAR_ME.notnull()]
+y_obs = df.MAR_ME[df.temperatureObserved.notnull() & df.MAR_ME.notnull()]
 
-nbins=300
-ind_sub = np.random.choice(np.arange(0,len(x)), size = 1000)
+res_obs = least_squares(residuals, params, args=(x_obs, y_obs))
+
+nbins=50
+ind_sub = np.random.choice(np.arange(0,len(x)), size = 175316)
 k = kde.gaussian_kde([x[ind_sub],y[ind_sub]])
-xi, yi = np.mgrid[x.min():x.max():nbins*1j, y.min():y.max():nbins*1j]
+xi, yi = np.mgrid[x.min():x.max():nbins*1j, 0:8000:nbins*1j]
 zi = k(np.vstack([xi.flatten(), yi.flatten()]))
  
+# %% 
 plt.figure()
-plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto' ,cmap=plt.cm.nipy_spectral)
+plt.pcolormesh(xi, yi, zi.reshape(xi.shape), 
+               shading='auto' ,cmap='magma_r', vmin=0,vmax=0.000005)
 # plt.plot(x,y,'o',markersize=1, linestyle='None')
 xs = np.linspace(-35, -0.001, 1000)
-plt.plot(xs, funcinv(xs,res.x[0],res.x[1]), 'w', lw=3)
+
+
+plt.plot(df.temperatureObserved, df.MAR_ME, 
+         c='tab:red', marker='+',linestyle='None', 
+         label='observed $T_{10m}$ vs. MAR melt')
+
+plt.plot(xs, funcinv(xs,res_obs.x[0],res_obs.x[1]),
+         'lightcoral', lw=2, label='exponential fit, melt in MAR vs. observed $T_{10m}$')
+plt.plot(xs, funcinv(xs,res.x[0],res.x[1]), 
+         'lightgray', lw=2, label='exponential fit, melt in MAR vs. $T_{10m}$ in MAR')
 plt.xlim(-35,0)
-plt.ylim(0,1000)
-plt.colorbar(label = 'density')
-plt.xlabel('10 m subsurface temperature')
-plt.ylabel('Annual melt (mm w.e.)')
+plt.ylim(0,8000)
+cbar = plt.colorbar(label = 'Density of MAR $T_{10m}$ vs. MAR melt points (-)')
+cbar.ax.set_yticks([0,0.00001])
+cbar.ax.set_yticklabels(['low','', '', '', '', 'high'])
+plt.xlabel('$T_{10m} (^oC)$')
+plt.ylabel('Average annual melt (mm w.e.)')
+plt.legend(loc='upper left')

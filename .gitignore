@@ -3,3 +3,4 @@ figures
 old
 *.nc
 __pycache__
+*.xml
