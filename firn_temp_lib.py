@@ -27,7 +27,7 @@ def interpolate_temperature(
     depth_cor,
     temp,
     depth=10,
-    min_diff_to_depth=1.5,
+    min_diff_to_depth=2,
     kind="quadratic",
     title="",
     plot=True,

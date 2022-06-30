@@ -264,7 +264,7 @@ def train_ANN(df, Predictors, TargetVariable = 'temperatureObserved', calc_weigh
     model = Sequential()
     model.add(Dense(units=40, input_dim=len(Predictors)))
     model.add(GaussianNoise(0.1))
-    model.add(Dense(units=40, input_dim=len(Predictors), activation='relu'))
+    model.add(Dense(units=40, activation='relu'))
     model.add(Dense(units=40, activation='relu'))
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')

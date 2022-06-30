@@ -173,10 +173,13 @@ for site in meta.site_short: #
     if site in ["JAR", "CEN2"]:
         print("no thermistor string intalled")
         continue
-    if site in ["SDL"]:
-        print("no thermistor string intalled")
-        continue
+
+        
     IMEI = meta.loc[meta.site_short == site, "IMEI"].values[0]
+    if site in ["SDL"]:
+        filename = 'Data/GCNv2//TOA5_23810.DataTable10min.dat'
+    else:
+        filename = 'Data/GCNv2/AWS_'+str(IMEI)+'.txt'
     # break
     # trying to copy most recent files:
     try:
@@ -205,6 +208,7 @@ for site in meta.site_short: #
         ]
         depth_cols = ["depth_" + str(i) for i in range(1, 1 + len(firn_temp_cols))]
         depth_ini_val = [1, 2, 3, 4, 5, 6, 7, 10]
+        
     try:
         if site == "SWC":
             df = pd.read_csv(
@@ -213,10 +217,13 @@ for site in meta.site_short: #
                 header=None,
                 names=cols,
             )
+        elif site == "SDL":
+            df = pd.read_csv(filename, skiprows=5, low_memory=False)
+            cols.append('?')
+            df.columns = cols
+            df.time = pd.to_datetime(df.time) - pd.Timedelta(days=365*102-88, minutes=8, seconds=16)
         else:
-            df = pd.read_csv(
-                "Data/GCNv2/AWS_" + str(IMEI) + ".txt", index_col=None, header=None
-            )
+            df = pd.read_csv(filename,  index_col=None, header=None)
             df.columns = cols
 
         df = df.astype(dict(zip(cols, values)), errors="ignore")
