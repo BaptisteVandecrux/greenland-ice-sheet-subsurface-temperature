@@ -39,7 +39,6 @@ def interp_pandas(s, kind="quadratic"):
     # plt.xlim(0, 60)
     return s
 
-# %%  FirnCover
 print("Loading FirnCover")
 time.sleep(0.2)
 
@@ -78,23 +77,21 @@ df_samira=df_samira.set_index('date')
 df_samira_a = pd.read_excel('Data/too shallow/Samira 1.60m deep/pitA_temp.xlsx')
 df_samira_a = df_samira_a.set_index('date')
 
-# %% 
-ds = xr.open_dataset("C:/Users/bav/OneDrive - Geological survey of Denmark and Greenland/Code/AWS_Processing/Input/GCnet/20190501_jaws/08c.dat_Req1957.nc")
+print('loading GC-Net surface height')
+ds = xr.open_dataset("C:/Users/bav/OneDrive - Geological survey of Denmark and Greenland/Data/AWS/GC-Net/20190501_jaws/08c.dat_Req1957.nc")
 df = ds.to_dataframe()
 df = df.reset_index(1)
 df = df.loc[df.nbnd == 0][['snh1','snh2']]
 
 df = df.loc['2015-01-01':]
-height_gcnet = df['Depth']-df.Depth.iloc[0]-0.5
+# height_gcnet = df['Depth']-df.Depth.iloc[0]-0.5
 
-#%%
 plt.figure()
 # df.snh1.plot()
 (df.snh2-1).plot()
 df_firncover["depth_1"].plot()
 
 
-# %%
 df_firncover = df_firncover.loc['2016-05-01':'2016-12-31']
 df_samira = df_samira.loc['2016-05-01':'2016-12-31']
 df_samira_a = df_samira_a.loc['2016-05-01':'2016-12-31']

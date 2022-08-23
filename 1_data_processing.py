@@ -183,18 +183,34 @@ df_all = df_all.append(
     ignore_index=True,
 )
 # %% Sumup
-# df_sumup = pd.read_csv('Data/Sumup/sumup_10m_borehole_temperature.csv')
-# df_sumup = df_sumup.loc[df_sumup.Latitude>0]
-# df_sumup['date'] = pd.to_datetime([str(t) for t in df_sumup.Date_Taken],format= '%Y%m%d')
-# df_sumup['reference'] = 'Miller, O.L., Solomon, D.K.,,Miege, C., Koenig, L., Forster, R., Schmerr, N., Ligtenberg, S.R.M., Legchenko, A.., Voss, C.I., Montgomery, L., McConnell, J.R. (in preparation) Hydrology of a perennial firn aquifer in Southeast Greenland: an overview driven by field data'
-# df_sumup['reference_short'] = 'Miller et al. (2018) as in sumup'
-# df_sumup['site']='FA'
-# df_sumup['note']='as reported in Sumup'
+df_sumup = pd.read_csv('Data/Sumup/SUMup_temperature_2022.csv')
+df_sumup = df_sumup.loc[df_sumup.Latitude>0]
+df_sumup = df_sumup.loc[df_sumup.Citation!=30]   # Redundant with Miege and containing positive temperatures
 
-# df_sumup = df_sumup.rename(columns={'Latitude':'latitude','Longitude':'longitude','Elevation':'elevation','Depth_Taken':'depthOfTemperatureObservation','Temperature':'temperatureObserved'})
-# df_all = df_all.append(df_sumup[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference','reference_short', 'note']],ignore_index=True)
+df_sumup['date'] = pd.to_datetime(df_sumup.Timestamp)
+df_sumup['note']='as reported in Sumup'
+df_sumup['reference'] = ''
+df_sumup['site'] = ''
+df_sumup.loc[df_sumup.Citation == 32, 'reference'] = 'Graeter, K., Osterberg, E. C., Ferris, D., Hawley, R. L., Marshall, H. P. and Lewis, G.: Ice Core Records of West Greenland Surface Melt and Climate Forcing, Geophys. Res. Lett., doi:10.1002/2017GL076641, 2018.'
+df_sumup.loc[df_sumup.Citation == 32, 'reference_short'] = 'Graeter et al. (2018) as in SUMup'
+df_sumup.loc[df_sumup.Citation == 33, 'reference'] = 'Lewis, G., Osterberg, E., Hawley, R., Marshall, H. P., Meehan, T., Graeter, K., McCarthy, F., Overly, T., Thundercloud, Z. and Ferris, D.: Recent precipitation decrease across the western Greenland ice sheet percolation zone, Cryosph., 13(11), 2797–2815, doi:10.5194/tc-13-2797- 2019, 2019.'
+df_sumup.loc[df_sumup.Citation == 33, 'reference_short'] = 'Lewis et al. (2019) as in SUMup'
 
-# ====> Sumup not used. Redundant with Miege and containing positive temperatures
+site_list = pd.DataFrame(np.array([[44, 'GTC01'], [45, 'GTC02'], [46, 'GTC04'],
+                      [47, 'GTC05'], [48, 'GTC06'], [49, 'GTC07'],
+                      [50, 'GTC08'], [51, 'GTC09'], [52, 'GTC11'],
+                      [53, 'GTC12'], [54, 'GTC13'], [55, 'GTC14'],
+                      [56, 'GTC15'], [57, 'GTC16']]), columns=['id','site']).set_index('id')
+for ind in site_list.index:
+    df_sumup.loc[df_sumup.Name == int(ind), 'site'] = site_list.loc[ind,'site']
+    
+
+df_sumup = df_sumup.drop(['Name','Citation','Method', 'Open_Time', 'Timestamp'], axis=1)
+
+df_sumup = df_sumup.rename(columns={'Latitude':'latitude','Longitude':'longitude','Elevation':'elevation','Depth':'depthOfTemperatureObservation','Temperature':'temperatureObserved'})
+df_all = df_all.append(df_sumup[['date','site', 'latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved', 'reference','reference_short', 'note']],ignore_index=True)
+
+# ====> only temperature at 18m depth
 
 # %% Miege aquifer
 print("Loading firn aquifer data")
