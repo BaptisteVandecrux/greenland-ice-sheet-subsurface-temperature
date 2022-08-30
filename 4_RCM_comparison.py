@@ -22,7 +22,7 @@ from rasterio.warp import transform
 ABC = 'ABCDEFGHIJKL'
 
 print('loading dataset')
-df = pd.read_csv("10m_temperature_dataset_monthly.csv")
+df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
 
 df_ambiguous_date = df.loc[pd.to_datetime(df.date, errors="coerce").isnull(), :]
 df = df.loc[~pd.to_datetime(df.date, errors="coerce").isnull(), :]
@@ -94,7 +94,7 @@ ds_hh = ds_hh.rio.write_crs(crs_racmo).drop_vars(['lat', 'lon'])
 # ds_hh = ds_hh.drop_vars(['lat', 'lon']).rio.reproject(target_crs)
 
 print('loading ANN')
-ds_ann = xr.open_dataset("predicted_T10m.nc")
+ds_ann = xr.open_dataset("output/predicted_T10m.nc")
 ds_ann['time'] = pd.to_datetime(ds_ann["time"])
 crs_ann = CRS.from_string('EPSG:4326')
 ds_ann = ds_ann.rio.write_crs(crs_ann)
@@ -104,6 +104,7 @@ ds_ann = ds_ann.rio.write_crs(crs_ann)
 df.date = pd.to_datetime(df.date)
 df['x'], df['y'] = transform( {'init': 'EPSG:4326'}, crs_racmo, df.longitude.values, df.latitude.values)
 df['x_mar'], df['y_mar'] = transform( {'init': 'EPSG:4326'}, crs_mar, df.longitude.values, df.latitude.values)
+df['x_3413'], df['y_3413'] = transform( {'init': 'EPSG:4326'}, {'init': 'EPSG:3413'}, df.longitude.values, df.latitude.values)
 df['T10m_RACMO'] = np.nan
 df['T10m_MAR'] = np.nan
 df['T10m_HIRHAM'] = np.nan
@@ -151,6 +152,12 @@ df = extract_T10m_values(ds_ann, df, dim1='longitude', dim2='latitude', name_out
 df_save = df.copy()  
     
 # %% Plotting RCM performance
+ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
+land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
+DSA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/DSA_MAR_4326.shp")
+LAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/LAPA_MAR_4326.shp")
+HAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/HAPA_MAR_4326.shp")
+firn = gpd.GeoDataFrame.from_file("Data/misc/firn areas/FirnLayer2000-2017_final_4326.shp")
 
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
 df_10m = df_10m.reset_index()
@@ -159,12 +166,49 @@ ref_list = df_10m["reference_short"].unique()
 df_10m["ref_id"] = [np.where(ref_list == x)[0] for x in df_10m["reference"]]
 
 matplotlib.rcParams.update({"font.size": 9})
-fig, ax = plt.subplots(2, 2,figsize=(9, 9))
+from matplotlib import cm
+from matplotlib.colors import Normalize 
+from scipy.interpolate import interpn
+import matplotlib.patheffects as pe
+from matplotlib import patches as mpatches
+
+fig, ax = plt.subplots(2, 2,figsize=(9, 15))
 ax = ax.flatten()
-plt.subplots_adjust(left=0.09, bottom=0.1, right=0.97, top=0.9, wspace=0.2, hspace=0.3)
+plt.subplots_adjust(left=0.09, bottom=0.08, right=0.97, top=0.6, wspace=0.2, hspace=0.2)
 cmap = matplotlib.cm.get_cmap("tab20b")
 version =['', 'v3.12','2.3p2','5']
 sym = ['o','^','v','d']
+
+ax_map = fig.add_axes([0.01, 0.6, 0.8, 0.4])
+land.to_crs('EPSG:3413').plot(ax=ax_map, color='k')
+ice.to_crs('EPSG:3413').plot(ax=ax_map, color='gray')
+DSA.to_crs('EPSG:3413').plot(ax=ax_map, color='tab:blue')
+LAPA.to_crs('EPSG:3413').plot(ax=ax_map, color='m')
+HAPA.to_crs('EPSG:3413').plot(ax=ax_map, color='tab:red')
+plt.annotate('A.', (0.01,0.9), fontsize=12,
+             xycoords='axes fraction')
+
+ax_map.axis('off')
+h=[np.nan,np.nan,np.nan,np.nan,np.nan, np.nan]
+h[0] = mpatches.Patch(facecolor='k', label='Land')
+h[1] = mpatches.Patch(facecolor='gray', label='Bare ice area')
+h[2] = mpatches.Patch(facecolor='tab:blue', label='Dry snow area')
+h[3] = mpatches.Patch(facecolor='m', label='Low accumulation\npercolation area')
+h[4] = mpatches.Patch(facecolor='tab:red', label='High accumulation\npercolation area')
+h[5] = plt.plot(np.nan, np.nan, marker='h', color='lightgray',markersize=8, markerfacecolor='k', linestyle='None',
+                label='Observation sites')[0]
+
+ax_map.legend(handles=h, bbox_to_anchor=(1.1,0.5), loc="lower left",fontsize=11, frameon=False)
+ax_map.set_title('A. Ice sheet areas')
+
+hb = ax_map.hexbin(df.x_3413, df.y_3413, bins='log',
+                   gridsize=(20, 26), mincnt=1,
+                   linewidth=0.5, edgecolors='white', cmap='magma')
+cbar_ax = fig.add_axes([0.64, 0.79, 0.1, 0.01])
+cb = plt.colorbar(hb, ax=ax_map, cax=cbar_ax, orientation='horizontal')
+cb.ax.get_yaxis().fontsize = 12
+cb.set_label('Number of monthly \n$T_{10m}$ observations', 
+             fontsize = 12, rotation=0)
 
 model_list = ['ANN', 'MAR','RACMO','HIRHAM']
 for i, model in enumerate(model_list):
@@ -194,10 +238,10 @@ for i, model in enumerate(model_list):
             r'RMSD=%.2f (%.2f) $^o$C' % (RMSE, RMSE2),
             r'N=%.0f  (%.0f)' % (np.sum(~np.isnan(df_10m['T10m_'+model])),
                                   np.sum(df_10m.T10m_HIRHAM.notnull()))))
-    ax[i].text(0.01, 0.95, 'All sites\n'+textstr, transform=ax[i].transAxes, fontsize=11,
+    ax[i].text(0.02, 0.95, 'All sites\n'+textstr, transform=ax[i].transAxes, fontsize=11,
             verticalalignment='top')
 
-    ax[i].set_title(ABC[i]+'. '+model, loc='left')
+    ax[i].set_title(ABC[i+1]+'. '+model, loc='left')
     ax[i].plot([-35, 2], [-35, 2], c="black")
     ax[i].set_xlim(-35, 2)
     ax[i].set_ylim(-35, 2)
@@ -227,7 +271,7 @@ for i,model in enumerate(model_list):
         # markeredgecolor="lightgray",
         markeredgewidth=0.5,
         markersize=5,
-        color='tab:red',
+        color='gray',
     )
     RMSE = np.sqrt(np.mean((df_10m['T10m_'+model] - df_10m.temperatureObserved) ** 2))
     ME = np.mean(df_10m['T10m_'+model] - df_10m.temperatureObserved)
@@ -237,11 +281,11 @@ for i,model in enumerate(model_list):
         r'$RMSD=%.2f ^o$C' % (RMSE, ),
         r'$N=%.0f$' % (np.sum(~np.isnan(df_10m['T10m_'+model])), )))
 
-    ax[i].text(0.63, 0.25, 'Ablation sites\n'+textstr, transform=ax[i].transAxes, fontsize=11,
-            verticalalignment='top', color='tab:red')
+    ax[i].text(0.64, 0.3, 'Ablation sites\n'+textstr, transform=ax[i].transAxes, fontsize=11,
+            verticalalignment='top', color='gray')
 
-fig.text(0.5, 0.04, 'Simulated 10 m subsurface temperature ($^o$C)', ha='center', va='center',fontsize=12)
-fig.text(0.03, 0.5, 'Observed 10 m subsurface temperature ($^o$C)', ha='center', va='center', rotation='vertical',fontsize=12)
+fig.text(0.5, 0.02, 'Simulated 10 m subsurface temperature ($^o$C)', ha='center', va='center',fontsize=12)
+fig.text(0.03, 0.35, 'Observed 10 m subsurface temperature ($^o$C)', ha='center', va='center', rotation='vertical',fontsize=12)
 fig.savefig("figures/model_comp_all_no_legend.png")
 
 # %% Plotting at selected sites
@@ -372,8 +416,43 @@ fig.text(0.5, 0.01, 'Year', ha='center', va='center',fontsize=12)
 fig.text(0.02, 0.5, '10 m subsurface temperature ($^o$C)', ha='center', va='center', rotation='vertical',fontsize=12)
 fig.savefig("figures/model_comp_selected_sites.png")
 
-# %% trend analysis
+# %% Preparing input for trend analysis
+
+ice = ice.to_crs("EPSG:3413")
+ice_4326 = ice.to_crs("EPSG:4326")
+
+
+# RACMO
+# if 'ds_racmo_3413' not in locals():
+#     ds_racmo_3413 = ds_racmo.rio.reproject("EPSG:3413")
+ds_racmo = ds_racmo.rio.clip(ice.to_crs(ds_hh.rio.crs).geometry.values, ds_racmo.rio.crs)
+ds_racmo_GrIS = (ds_racmo.mean(dim=('x','y'))).to_pandas().T10m-273.15
+# if 'ds_hh_3413' not in locals():
+#     ds_hh_3413 = ds_hh.rio.reproject("EPSG:3413")
+ds_hh = ds_hh.rio.clip(ice.to_crs(ds_hh.rio.crs).geometry.values, ds_hh.rio.crs)
+# ds_hh_3413['T10m'] = ds_hh_3413.T10m.where(ds_hh_3413.T10m!=3.4028234663852886e+38)
+ds_hh_GrIS = (ds_hh.mean(dim=('x','y'))).to_pandas().T10m-273.15
+# ds_hh.to_netcdf('HIRHAM_T10m.nc')
+# if 'ds_mar_3413' not in locals():
+#     ds_mar_3413 = ds_mar.rio.reproject("EPSG:3413")
+ds_mar = ds_mar.rio.clip(ice.to_crs(ds_mar.rio.crs).geometry.values, ds_mar.rio.crs)
+ds_mar['T10m'] = ds_mar.T10m.where(ds_mar.T10m > -200)
+ds_mar_GrIS = (ds_mar.mean(dim=('x','y'))).to_pandas().T10m
+if 'ds_ann_3413' not in locals():
+    ds_ann_3413 = ds_ann.rio.reproject("EPSG:3413")
+
+ds_ann = ds_ann.rio.clip(ice_4326.geometry.values, ice_4326.crs)
+ds_ann_3413 = ds_ann_3413.rio.clip(ice.geometry.values, ice.crs)
+# ds_ann_3413_2 = ds_ann_3413.rio.clip(ice.geometry.values, ice.crs, all_touched=True)
+
+ds_ann_3413['T10m'] = ds_ann_3413.T10m.where(ds_ann_3413['T10m'] != 3.4028234663852886e+38)
+weights = np.cos(np.deg2rad(ds_ann.latitude))
+weights.name = "weights"
+ds_ann_weighted = ds_ann.weighted(weights)
+ds_ann_GrIS = (ds_ann_weighted.mean(('latitude','longitude'))).to_pandas().T10m
+
 from datetime import datetime as dt
+np.seterr(invalid='ignore')
 
 def toYearFraction(date):
     year = date.year
@@ -423,137 +502,10 @@ def linregress_3D(x, y):
     stderr = slope/tstats
     
     from scipy.stats import t
-    pval   = t.sf(tstats, n-2)*2
+    pval   = t.sf(abs(tstats), n-2)*2
     pval   = xr.DataArray(pval, dims=cor.dims, coords=cor.coords)
 
     return cov,cor,slope,intercept,pval,stderr
-
-year_ranges = np.array([[1954, 1985],
-                        [1985, 2022],
-                        [1954, 2022]])
-
-import statsmodels.api as sm
-import rioxarray # for the extension to load
-import scipy.odr
-import scipy.stats
-from scipy import optimize
-
-land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
-land = land.to_crs("EPSG:3413")
-
-
-def plot_trend_analysis(ds_T10m, T10m_GrIS, model, year_ranges):
-    # ds_T10m = ds_T10m.transpose("time", 'x', 'y')
-    land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
-    land = land.to_crs(ds_T10m.rio.crs)
-        
-    fig, ax = plt.subplots(1,3,figsize=(9,7))
-    plt.subplots_adjust(hspace = 0.1,wspace=0.1, right=0.8, left = 0.01, bottom=-0.02, top = 0.8)
-    ax = ax.flatten()
-    ax_bot = fig.add_axes([0.12, 0.80, 0.87, 0.15])
-    ax_bot.set_title(ABC[0]+'. Ice-sheet-wide average',fontweight = 'bold')
-    ax_bot.plot(T10m_GrIS.index, T10m_GrIS,color='lightgray')
-    ax_bot.step(T10m_GrIS.resample('Y').mean().index, T10m_GrIS.resample('Y').mean())
-    ds_T10m_dy = ds_T10m.copy()
-    ds_T10m_dy['time'] = [toYearFraction(d) for d in pd.to_datetime(ds_T10m_dy.time.values)]
-    ds_T10m_dy = ds_T10m_dy.T10m.transpose('time','y','x')
-    for i in range(3):
-        # tmp = T10m_GrIS.resample('Y').mean().loc[str(year_ranges[i,0]):str (year_ranges[i,1])]
-        tmp = ds_T10m_dy.sel(time=slice(year_ranges[i][0], year_ranges[i][1]))
-        _, _,slope, _, pval, _ = linregress_3D(ds_T10m_dy.time, ds_T10m_dy)
-    
-
-        land.plot(ax=ax[i], zorder=0, color="black")
-        vmin = -0.2; vmax = 0.2
-            
-        im = slope.plot(ax=ax[i],vmin = vmin, vmax = vmax,
-                                            cmap='coolwarm',add_colorbar=False)
-        significant = slope.where(pval < 0.05)
-        X, Y = np.meshgrid(slope.x, slope.y)
-        plt.hexbin(X.reshape(-1), Y.reshape(-1), significant.data[0,:,:].reshape(-1), gridsize=(40,20))
-        
-        year_start = max(year_ranges[i,0], tmp.index.min().year)
-        year_end = min(year_ranges[i,1]-1, tmp.index.max().year)
-        ax[i].set_title(ABC[i+1]+'. '+str(year_start)+' to '+str(year_end),fontweight = 'bold')
-        if i in [1,3]:
-            if i == 1:
-                cbar_ax = fig.add_axes([0.85, 0.07, 0.03, 0.6])
-            cb = plt.colorbar(im, ax = ax[i], cax=cbar_ax)
-            cb.ax.get_yaxis().labelpad = 18
-            cb.set_label('Trend in 10 m subsurface temperature ($^o$C yr $^{-1}$)', 
-                         fontsize = 12, rotation=270)
-        ax[i].set_axis_off()
-
-        ax[i].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
-        ax[i].set_ylim(land.bounds.miny.min(),land.bounds.maxy.max())
-        
-    X = np.array([toYearFraction(d) for d in T10m_GrIS.loc[T10m_GrIS.notnull()].index])
-    y = T10m_GrIS.loc[T10m_GrIS.notnull()].values
-    
-    # calculating trend on entire period
-    X2 = sm.add_constant(X)
-    est = sm.OLS(y, X2)
-    est2 = est.fit()
-    print('%s, %i-%i, %0.3f, %0.3f'% (model, X[0], X[-1], est2.params[1]*10, est2.pvalues[1]))
-
-    # calculating piecewise function, trends and pvalues of the trends
-    def piecewise_linear(x, y0, k1, k2):
-        x0 = 1985.33
-        return np.piecewise(x, [x < x0], [lambda x: k1*x + y0-k1*x0, lambda x: k2*x + y0-k2*x0])
-    p , e = optimize.curve_fit(piecewise_linear, X, y)
-
-
-    def f_wrapper_for_odr(beta, x): # parameter order for odr
-        return piecewise_linear(x, *beta)
-    
-    func = scipy.odr.odrpack.Model(f_wrapper_for_odr)
-    data = scipy.odr.odrpack.Data(X,y)
-    myodr = scipy.odr.odrpack.ODR(data, func, beta0=p,  maxit=0)
-    myodr.set_job(fit_type=2)
-    ptatistics = myodr.run()
-    df_e = len(X) - len(p) # degrees of freedom, error
-    cov_beta = ptatistics.cov_beta # parameter covariance matrix from ODR
-    sd_beta = ptatistics.sd_beta * ptatistics.sd_beta
-    ci = []
-    t_df = scipy.stats.t.ppf(0.975, df_e)
-    ci = []
-    for i in range(len(p)):
-        ci.append([p[i] - t_df * ptatistics.sd_beta[i], p[i] + t_df * ptatistics.sd_beta[i]])
-    
-    tstat_beta = p / ptatistics.sd_beta # coeff t-statistics
-    pstat_beta = (1.0 - scipy.stats.t.cdf(np.abs(tstat_beta), df_e)) * 2.0    # coef. p-values
-    print('%s, %i-%i, %0.3f, %0.3f'% (model, X[0], 1985, p[1]*10, pstat_beta[1]))
-    print('%s, %i-%i, %0.3f, %0.3f'% (model, 1985, X[-1], p[2]*10, pstat_beta[2]))
-
-
-    y_pred = piecewise_linear(X, *p)
-    ax_bot.plot(T10m_GrIS.loc[T10m_GrIS.notnull()].index, y_pred, color='k', linestyle='--')
-    ax_bot.autoscale(enable=True, axis='x', tight=True)
-    ax_bot.set_ylabel('10 m subsurface \ntemperature ($^o$C)', fontsize=12)
-    fig.savefig( 'figures/'+model+'_trend_map.png',dpi=300)
-    
-    # trend over common period
-    X = np.array([toYearFraction(d) for d in T10m_GrIS.loc['1980':'2016'].index])
-    y = T10m_GrIS.loc['1980':'2016'].values
-    X2 = sm.add_constant(X)
-    est = sm.OLS(y, X2)
-    est2 = est.fit()
-    print('%s, %i-%i, %0.3f, %0.3f'% (model, X[0], X[-1], est2.params[1]*10, est2.pvalues[1]))
-    
-if 'ds_ann_3413' not in locals():
-    ds_ann_3413 = ds_ann.rio.reproject("EPSG:3413")
-ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
-ice = ice.to_crs("EPSG:3413")
-ice_4326 = ice.to_crs("EPSG:4326")
-ds_ann = ds_ann.rio.clip(ice_4326.geometry.values, ice_4326.crs)
-ds_ann_3413 = ds_ann_3413.rio.clip(ice.geometry.values, ice.crs)
-# ds_ann_3413_2 = ds_ann_3413.rio.clip(ice.geometry.values, ice.crs, all_touched=True)
-
-ds_ann_3413['T10m'] = ds_ann_3413.T10m.where(ds_ann_3413['T10m'] != 3.4028234663852886e+38)
-weights = np.cos(np.deg2rad(ds_ann.latitude))
-weights.name = "weights"
-ds_ann_weighted = ds_ann.weighted(weights)
-ds_ann_GrIS = (ds_ann_weighted.mean(('latitude','longitude'))).to_pandas().T10m
 
 # finding ice-sheet-wide average and stdev values for 1954, 1985 and 2021
 # ds_ann_y = ds_ann.resample(time='Y').mean()
@@ -587,46 +539,225 @@ ds_ann_GrIS = (ds_ann_weighted.mean(('latitude','longitude'))).to_pandas().T10m
 # plt.plot(x, y_pred)
 # Answer: 1985-04-01
 
-plot_trend_analysis(ds_ann_3413, ds_ann_GrIS, 'ANN', year_ranges)
+year_ranges = np.array([[1954, 1985],
+                        [1985, 2022],
+                        [1954, 2022]])
 
-#%%
-
-# RACMO
-# if 'ds_racmo_3413' not in locals():
-#     ds_racmo_3413 = ds_racmo.rio.reproject("EPSG:3413")
-ds_racmo = ds_racmo.rio.clip(ice.to_crs(ds_hh.rio.crs).geometry.values, ds_racmo.rio.crs)
-ds_racmo_GrIS = (ds_racmo.mean(dim=('x','y'))).to_pandas().T10m-273.15
-plot_trend_analysis(ds_racmo, ds_racmo_GrIS, 'RACMO', year_ranges)
-
-# HIRHAM
-# if 'ds_hh_3413' not in locals():
-#     ds_hh_3413 = ds_hh.rio.reproject("EPSG:3413")
-ds_hh = ds_hh.rio.clip(ice.to_crs(ds_hh.rio.crs).geometry.values, ds_hh.rio.crs)
-# ds_hh_3413['T10m'] = ds_hh_3413.T10m.where(ds_hh_3413.T10m!=3.4028234663852886e+38)
-ds_hh_GrIS = (ds_hh.mean(dim=('x','y'))).to_pandas().T10m-273.15
-plot_trend_analysis(ds_hh, ds_hh_GrIS, 'HIRHAM', year_ranges)
-ds_hh.to_netcdf('HIRHAM_T10m.nc')
-
-# MAR
-# if 'ds_mar_3413' not in locals():
-#     ds_mar_3413 = ds_mar.rio.reproject("EPSG:3413")
-ds_mar = ds_mar.rio.clip(ice.to_crs(ds_mar.rio.crs).geometry.values, ds_mar.rio.crs)
-ds_mar['T10m'] = ds_mar.T10m.where(ds_mar.T10m > -200)
-ds_mar_GrIS = (ds_mar.mean(dim=('x','y'))).to_pandas().T10m
-plot_trend_analysis(ds_mar, ds_mar_GrIS, 'MAR', year_ranges)
-
-# %% Firn area averages analysis
-DSA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/DSA_MAR_4326.shp")
-HAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/HAPA_MAR_4326.shp")
-LAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/LAPA_MAR_4326.shp")
-firn = gpd.GeoDataFrame.from_file("Data/misc/firn areas/FirnLayer2000-2017_final_4326.shp")
 CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
                   '#f781bf', '#a65628', '#984ea3',
                   '#999999', '#e41a1c', '#dede00']
-def plot_selected_ds(ds, shape, ax, label, mask = 0):
+# %% plotting
+import statsmodels.api as sm
+import rioxarray # for the extension to load
+import scipy.odr
+import scipy.stats
+from scipy import optimize
+
+ds_T10m = ds_ann_3413
+T10m_GrIS = ds_ann_GrIS
+model = 'ANN'
+
+land = land.to_crs(ds_T10m.rio.crs)
+    
+fig, ax = plt.subplots(2,3,figsize=(9,12))
+plt.subplots_adjust(hspace = 0.1,wspace=0.1, right=0.8, left = 0.01, bottom=0.01, top = 0.8)
+ax = ax.flatten()
+ax_bot = fig.add_axes([0.12, 0.84, 0.87, 0.11])
+ax_bot.set_title(ABC[0]+'. Ice-sheet-wide average',fontweight = 'bold', loc='left')
+# ax_bot.plot(T10m_GrIS.index, T10m_GrIS,color='lightgray')
+ax_bot.step(T10m_GrIS.resample('Y').mean().index,
+            T10m_GrIS.resample('Y').mean(),
+            color=CB_color_cycle[0],
+            label = 'ANN')
+ds_T10m_dy = ds_T10m.copy()
+ds_T10m_dy['time'] = [toYearFraction(d) for d in pd.to_datetime(ds_T10m_dy.time.values)]
+ds_T10m_dy = ds_T10m_dy.T10m.transpose('time','y','x')
+for i in range(3):
+    # tmp = T10m_GrIS.resample('Y').mean().loc[str(year_ranges[i,0]):str (year_ranges[i,1])]
+
+    tmp = ds_T10m_dy.sel(time=slice(year_ranges[i][0], year_ranges[i][1]))
+    _, _,slope, _, pval, _ = linregress_3D(tmp.time, tmp)
+
+
+    land.plot(ax=ax[i], zorder=0, color="black")
+    vmin = -1.5; vmax = 1.5
+        
+    im = (slope*10).plot(ax=ax[i],vmin = vmin, vmax = vmax,
+                                        cmap='coolwarm',add_colorbar=False)
+    significant = slope.where(pval > 0.1)
+    X, Y = np.meshgrid(slope.x, slope.y)
+    ax[i].hexbin(X.reshape(-1), Y.reshape(-1), 
+               significant.data[:,:].reshape(-1), 
+               gridsize=(50,50), hatch='..', alpha=0)
+    
+    year_start = max(year_ranges[i,0], int(tmp.time.values.min()))
+    year_end = min(year_ranges[i,1]-1, int(tmp.time.values.max()))
+    if i in [1,3]:
+        if i == 1:
+            cbar_ax = fig.add_axes([0.85, 0.07, 0.03, 0.6])
+        cb = plt.colorbar(im, ax = ax[i], cax=cbar_ax)
+        cb.ax.get_yaxis().labelpad = 18
+        cb.set_label('Trend in 10 m subsurface temperature ($^o$C decade $^{-1}$)', 
+                     fontsize = 12, rotation=270)
+    ax[i].set_axis_off()
+    ax[i].set_title(ABC[i+1]+'. ANN, '+str(year_start)+' to '+str(year_end),fontweight = 'bold')
+    
+    ax[i].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
+    ax[i].set_ylim(land.bounds.miny.min(),land.bounds.maxy.max())
+
+# calculating trend on entire period
+X = np.array([toYearFraction(d) for d in T10m_GrIS.loc[T10m_GrIS.notnull()].index])
+y = T10m_GrIS.loc[T10m_GrIS.notnull()].values
+
+X2 = sm.add_constant(X)
+est = sm.OLS(y, X2)
+est2 = est.fit()
+print('%s, %i-%i, %0.3f, %0.3f'% (model, X[0], X[-1], est2.params[1]*10, est2.pvalues[1]))
+
+# calculating piecewise function, trends and pvalues of the trends
+def piecewise_linear(x, y0, k1, k2):
+    x0 = 1985.33
+    return np.piecewise(x, [x < x0], [lambda x: k1*x + y0-k1*x0, lambda x: k2*x + y0-k2*x0])
+p , e = optimize.curve_fit(piecewise_linear, X, y)
+
+
+def f_wrapper_for_odr(beta, x): # parameter order for odr
+    return piecewise_linear(x, *beta)
+
+func = scipy.odr.odrpack.Model(f_wrapper_for_odr)
+data = scipy.odr.odrpack.Data(X,y)
+myodr = scipy.odr.odrpack.ODR(data, func, beta0=p,  maxit=0)
+myodr.set_job(fit_type=2)
+ptatistics = myodr.run()
+df_e = len(X) - len(p) # degrees of freedom, error
+cov_beta = ptatistics.cov_beta # parameter covariance matrix from ODR
+sd_beta = ptatistics.sd_beta * ptatistics.sd_beta
+ci = []
+t_df = scipy.stats.t.ppf(0.975, df_e)
+ci = []
+for i in range(len(p)):
+    ci.append([p[i] - t_df * ptatistics.sd_beta[i], p[i] + t_df * ptatistics.sd_beta[i]])
+
+tstat_beta = p / ptatistics.sd_beta # coeff t-statistics
+pstat_beta = (1.0 - scipy.stats.t.cdf(np.abs(tstat_beta), df_e)) * 2.0    # coef. p-values
+print('%s, %i-%i, %0.3f, %0.3f'% (model, X[0], 1985, p[1]*10, pstat_beta[1]))
+print('%s, %i-%i, %0.3f, %0.3f'% (model, 1985, X[-1], p[2]*10, pstat_beta[2]))
+
+y_pred = piecewise_linear(X, *p)
+if model == 'ANN':
+    ax_bot.plot(T10m_GrIS.loc[T10m_GrIS.notnull()].index, y_pred, 
+                color=CB_color_cycle[0], linestyle='--')
+ax_bot.autoscale(enable=True, axis='x', tight=True)
+ax_bot.set_ylabel('10 m subsurface \ntemperature ($^o$C)', fontsize=12)
+
+# trend over common period
+X = np.array([toYearFraction(d) for d in T10m_GrIS.loc['1980':'2016'].index])
+y = T10m_GrIS.loc['1980':'2016'].values
+X2 = sm.add_constant(X)
+est = sm.OLS(y, X2)
+est2 = est.fit()
+print('%s, %i-%i, %0.3f, %0.3f'% (model, X[0], X[-1], est2.params[1]*10, est2.pvalues[1]))
+
+ds_T10m_l = (ds_racmo, ds_hh, ds_mar)
+T10m_GrIS_l = (ds_racmo_GrIS, ds_hh_GrIS, ds_mar_GrIS)
+model_l=('RACMO','HIRHAM','MAR')
+
+for k in range(len(ds_T10m_l)):
+    ds_T10m = ds_T10m_l[k]
+    T10m_GrIS = T10m_GrIS_l[k]
+    model = model_l[k]
+            
+    land = land.to_crs(ds_T10m.rio.crs)      
+    ax_bot.step(T10m_GrIS.resample('Y').mean().index, 
+                T10m_GrIS.resample('Y').mean(),
+                label = model,
+                color = CB_color_cycle[1+k],
+                alpha = 0.8)
+    ds_T10m_dy = ds_T10m.copy()
+    ds_T10m_dy['time'] = [toYearFraction(d) for d in pd.to_datetime(ds_T10m_dy.time.values)]
+    ds_T10m_dy = ds_T10m_dy.T10m.transpose('time','y','x')
+
+    tmp = ds_T10m_dy.sel(time=slice(1980, 2016))
+    _, _,slope, _, pval, _ = linregress_3D(tmp.time, tmp)
+
+    land.plot(ax=ax[k + 3], zorder=0, color="black")
+    im = (slope*10).plot(ax=ax[k + 3],vmin = vmin, vmax = vmax,
+                                        cmap='coolwarm',add_colorbar=False)
+    X, Y = np.meshgrid(slope.x, slope.y)
+    ax[k + 3].hexbin(X.reshape(-1), Y.reshape(-1), 
+               slope.where(pval > 0.1).data[:,:].reshape(-1), 
+               gridsize=(50,50), hatch='..', alpha=0)
+    
+
+    ax[k + 3].set_axis_off()    
+    ax[k + 3].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
+    ax[k + 3].set_ylim(land.bounds.miny.min(),land.bounds.maxy.max())
+    ax[k + 3].set_title(ABC[k + 4]+'. '+model+', 1980 to 2016',
+                fontsize = 12, fontweight= 'bold')
+    # calculating trend on entire period
+    X = np.array([toYearFraction(d) for d in T10m_GrIS.loc[T10m_GrIS.notnull()].index])
+    y = T10m_GrIS.loc[T10m_GrIS.notnull()].values
+    
+    X2 = sm.add_constant(X)
+    est = sm.OLS(y, X2)
+    est2 = est.fit()
+    print('%s, %i-%i, %0.3f, %0.3f'% (model, X[0], X[-1], est2.params[1]*10, est2.pvalues[1]))
+    
+    # trend over common period
+    X = np.array([toYearFraction(d) for d in T10m_GrIS.loc['1980':'2016'].index])
+    y = T10m_GrIS.loc['1980':'2016'].values
+    X2 = sm.add_constant(X)
+    est = sm.OLS(y, X2)
+    est2 = est.fit()
+    print('%s, %i-%i, %0.3f, %0.3f'% (model, X[0], X[-1], est2.params[1]*10, est2.pvalues[1]))
+ax_bot.legend(ncol=4, loc = 'upper right', fontsize = 12, bbox_to_anchor=(1,1.35))
+fig.savefig( 'figures/all_RCMs_trend_map.png',dpi=300)
+
+# %% Firn area averages analysis
+
+
+def selected_area(ds, shape, mask = 0):
     ds_select = ds.rio.clip(shape.to_crs(ds.rio.crs).geometry.values, 
                                                  ds.rio.crs,
                                                  all_touched=True)
+        
+    if mask:
+        ds_select = ds.where(ds_select.T10m.isel(time=100).isnull())
+
+    try:
+        tmp = (ds_select.mean(dim=('x','y'))).to_pandas().T10m
+    except:
+        weights = np.cos(np.deg2rad(ds_select.latitude))
+        weights.name = "weights"
+        tmp_w = ds_select.weighted(weights)
+        tmp = (tmp_w.mean(dim=('latitude','longitude'))).to_pandas().T10m
+    return tmp.resample('Y').mean()
+
+ds_ann_DSA = selected_area(ds_ann, DSA)
+ds_ann_LAPA = selected_area(ds_ann, LAPA)
+ds_ann_HAPA = selected_area(ds_ann, HAPA)
+ds_ann_BIA  = selected_area(ds_ann, firn, mask=1)
+
+ds_racmo_DSA = selected_area(ds_racmo, DSA)-273.15
+ds_racmo_LAPA = selected_area(ds_racmo, LAPA)-273.15
+ds_racmo_HAPA = selected_area(ds_racmo, HAPA)-273.15
+ds_racmo_BIA  = selected_area(ds_racmo, firn, mask=1)-273.15
+
+ds_mar_DSA = selected_area(ds_mar, DSA)
+ds_mar_LAPA = selected_area(ds_mar, LAPA)
+ds_mar_HAPA = selected_area(ds_mar, HAPA)
+ds_mar_BIA  = selected_area(ds_mar, firn, mask=1)
+
+ds_hh_DSA = selected_area(ds_hh, DSA)-273.15
+ds_hh_LAPA = selected_area(ds_hh, LAPA)-273.15
+ds_hh_HAPA = selected_area(ds_hh, HAPA)-273.15
+ds_hh_BIA  = selected_area(ds_hh, firn, mask=1)-273.15
+
+#%% Plotting for different firn areas
+CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
+                  '#f781bf', '#a65628', '#984ea3',
+                  '#999999', '#e41a1c', '#dede00']
+def plot_selected_ds(tmp, ax, label, mask=0):
     if label == 'ANN':
         col = CB_color_cycle[0]
     elif label == 'RACMO':
@@ -637,31 +768,17 @@ def plot_selected_ds(ds, shape, ax, label, mask = 0):
         col = CB_color_cycle[3]
     else:
         col = CB_color_cycle[4]
-        
-    if mask:
-        ds_select = ds.where(ds_select.T10m.isel(time=100).isnull())
-    if label in ['HIRHAM','RACMO', 'ERA5 $T_{2m}$']:
-        offset = -273.15
-    else:
-        offset = 0
-    try:
-        tmp = (ds_select.mean(dim=('x','y'))).to_pandas().T10m + offset
-    except:
-        weights = np.cos(np.deg2rad(ds_select.latitude))
-        weights.name = "weights"
-        tmp_w = ds_select.weighted(weights)
-        tmp = (tmp_w.mean(dim=('latitude','longitude'))).to_pandas().T10m + offset
-    
-    tmp.plot(ax=ax, color='black', label='_no_legend_',alpha=0.3)
+            
+    # tmp.plot(ax=ax, color='black', label='_no_legend_',alpha=0.3)
     tmp = tmp.resample('Y').mean()
-    tmp.plot(ax=ax, label=label, drawstyle='steps-post', linewidth=3, color=col)
+    tmp.plot(ax=ax, label=label, drawstyle='steps-post', linewidth=3, color=col, alpha = 0.8)
 
     # print(tmp.loc['1980-01-01':'1990-01-01'].mean())
     # print(tmp.loc['2010-01-01':'2020-01-01'].mean())
     # print(tmp.loc['1998-01-01':'2009-01-01'].mean())
     # print(tmp.loc['2010-01-01':'2018-01-01'].mean())
 
-    tmp = tmp.loc['1991':]
+    tmp = tmp.loc['1985':]
     X = np.array([toYearFraction(d) for d in tmp.index])
     y = tmp.values
     
@@ -671,85 +788,135 @@ def plot_selected_ds(ds, shape, ax, label, mask = 0):
 
     print('%s, %i-%i, %0.3f, %0.3f'% (label, X[0], X[-1], est2.params[1]*10, est2.pvalues[1]))
 
-ds_era = xr.open_dataset('Data/ERA5/m_era5_t2m_all.nc').rename({'t2m':'T10m'})
-ds_era = ds_era.rio.write_crs("epsg:4326")
 
-fig, ax = plt.subplots(5,1, figsize=(10,9))
-fig.subplots_adjust(left=0.3,right=0.99,top=0.95,bottom=0.03, hspace=0.25)
+fig, ax = plt.subplots(4,1, figsize=(7,6))
+fig.subplots_adjust(left=0.1,right=0.98,top=0.93,bottom=0.07, hspace=0.25)
 ax=ax.flatten()
 print('bare ice')
-plot_selected_ds(ds_ann, firn, ax[0], 'ANN', mask=1)
-plot_selected_ds(ds_racmo, firn, ax[0], 'RACMO', mask=1)
-plot_selected_ds(ds_mar, firn, ax[0], 'MAR', mask=1)
-plot_selected_ds(ds_hh, firn,ax[0], 'HIRHAM', mask=1)
-plot_selected_ds(ds_era, firn,ax[0], 'ERA5 $T_{2m}$', mask=1)
-ax[0].set_title('B. Bare ice area', loc='left')
-ax[0].legend(ncol=4, bbox_to_anchor=(1,1), loc="lower right",fontsize=11)
+plot_selected_ds(ds_ann_BIA, ax[0], 'ANN')
+plot_selected_ds(ds_racmo_BIA, ax[0], 'RACMO')
+plot_selected_ds(ds_mar_BIA, ax[0], 'MAR')
+plot_selected_ds(ds_hh_BIA, ax[0], 'HIRHAM')
+# plot_selected_ds(ds_era, firn,ax[0], 'ERA5 $T_{2m}$')
+ax[0].set_title('A. Bare ice area', loc='left')
+ax[0].legend(ncol=4, bbox_to_anchor=(1,1.05), loc="lower right",fontsize=11)
 print('DSA')
-plot_selected_ds(ds_ann, DSA, ax[1], 'ANN')
-plot_selected_ds(ds_racmo, DSA, ax[1], 'RACMO')
-plot_selected_ds(ds_mar, DSA, ax[1], 'MAR')
-plot_selected_ds(ds_hh, DSA, ax[1], 'HIRHAM')
-plot_selected_ds(ds_era, DSA, ax[1], 'ERA5 $T_{2m}$')
-ax[1].set_title('C. Dry snow area', loc='left')
+plot_selected_ds(ds_ann_DSA, ax[1], 'ANN')
+plot_selected_ds(ds_racmo_DSA, ax[1], 'RACMO')
+plot_selected_ds(ds_mar_DSA, ax[1], 'MAR')
+plot_selected_ds(ds_hh_DSA, ax[1], 'HIRHAM')
+# plot_selected_ds(ds_era_DSA, ax[1], 'ERA5 $T_{2m}$')
+ax[1].set_title('B. Dry snow area', loc='left')
 print('LAPA')
-plot_selected_ds(ds_ann, LAPA, ax[2], 'ANN')
-plot_selected_ds(ds_racmo, LAPA, ax[2], 'RACMO')
-plot_selected_ds(ds_mar, LAPA, ax[2], 'MAR')
-plot_selected_ds(ds_hh, LAPA, ax[2], 'HIRHAM')
-plot_selected_ds(ds_era, LAPA, ax[2], 'ERA5 $T_{2m}$')
-ax[2].set_title('D. Low accumulation percolation area', loc='left')
+plot_selected_ds(ds_ann_LAPA, ax[2], 'ANN')
+plot_selected_ds(ds_racmo_LAPA, ax[2], 'RACMO')
+plot_selected_ds(ds_mar_LAPA, ax[2], 'MAR')
+plot_selected_ds(ds_hh_LAPA, ax[2], 'HIRHAM')
+# plot_selected_ds(ds_era_LAPA, ax[2], 'ERA5 $T_{2m}$')
+ax[2].set_title('C. Low accumulation percolation area', loc='left')
 print('HAPA')
-plot_selected_ds(ds_ann, HAPA, ax[3], 'ANN')
-plot_selected_ds(ds_racmo, HAPA, ax[3], 'RACMO')
-plot_selected_ds(ds_mar, HAPA, ax[3], 'MAR')
-plot_selected_ds(ds_hh, HAPA, ax[3], 'HIRHAM')
-plot_selected_ds(ds_era, HAPA, ax[3], 'ERA5 $T_{2m}$')
-ax[3].set_title('E. High accumulation percolation area', loc='left')
-print('All Greenland')
-plot_selected_ds(ds_ann, ice, ax[4], 'ANN')
-plot_selected_ds(ds_racmo, ice, ax[4], 'RACMO')
-plot_selected_ds(ds_mar, ice, ax[4], 'MAR')
-plot_selected_ds(ds_hh, ice, ax[4], 'HIRHAM')
-plot_selected_ds(ds_era, ice, ax[4], 'ERA5 $T_{2m}$')
-ax[4].set_title('F. All Greenland ice', loc='left')
+plot_selected_ds(ds_ann_HAPA, ax[3], 'ANN')
+plot_selected_ds(ds_racmo_HAPA, ax[3], 'RACMO')
+plot_selected_ds(ds_mar_HAPA, ax[3], 'MAR')
+plot_selected_ds(ds_hh_HAPA, ax[3], 'HIRHAM')
+# plot_selected_ds(ds_era, HAPA, ax[3], 'ERA5 $T_{2m}$')
+ax[3].set_title('D. High accumulation percolation area', loc='left')
 
-ax[4].set_ylim(-29,-18)
-ax[1].set_ylim(-29,-18)
-ax[2].set_ylim(-19,-7)
-ax[3].set_ylim(-19,-7)
-ax[0].set_ylim(-19,-7)
-for i in range(5):
-    ax[i].set_ylim(-35,0)
+ax[0].set_ylim(-16,-16+10)
+ax[1].set_ylim(-29,-29+10)
+ax[2].set_ylim(-18,-18+10)
+ax[3].set_ylim(-15,-15+10)
+for i in range(4):
     ax[i].set_xlim(pd.to_datetime('1954'),pd.to_datetime('2021'))
     ax[i].tick_params(axis='y', labelsize= 10.5)
     ax[i].grid()
 
-    if i <4:
+    if i <3:
         ax[i].axes.xaxis.set_ticklabels([])
         ax[i].set_xlabel('')
     else:
         ax[i].set_xlabel('Year', fontsize=11)
-ax[2].set_ylabel('Average 10 m subsurface temperature ($^o$C)',fontsize=12)
-ax[4].tick_params(axis='x', labelsize= 10.5)
-ax_map = fig.add_axes([0.02, 0.32, 0.18, 0.7])
-land.to_crs('EPSG:3413').plot(ax=ax_map, color='k')
-ice.to_crs('EPSG:3413').plot(ax=ax_map, color='lightblue')
-DSA.to_crs('EPSG:3413').plot(ax=ax_map, color='tab:blue')
-LAPA.to_crs('EPSG:3413').plot(ax=ax_map, color='m')
-HAPA.to_crs('EPSG:3413').plot(ax=ax_map, color='tab:red')
-ax_map.axes.get_xaxis().set_ticks([])
-ax_map.axes.get_yaxis().set_ticks([])
-from matplotlib import patches as mpatches
-h=[np.nan,np.nan,np.nan,np.nan,np.nan]
-h[0] = mpatches.Patch(facecolor='k', label='Land')
-h[1] = mpatches.Patch(facecolor='lightblue', label='Bare ice area')
-h[2] = mpatches.Patch(facecolor='tab:blue', label='Dry snow area')
-h[3] = mpatches.Patch(facecolor='m', label='Low accumulation\npercolation area')
-h[4] = mpatches.Patch(facecolor='tab:red', label='High accumulation\npercolation area')
-ax_map.legend(handles=h, bbox_to_anchor=(-0.1,-0.6), loc="lower left",fontsize=11)
-ax_map.set_title('A. Ice sheet areas')
-fig.subplots_adjust(left=0.3,right=0.99,top=0.95,bottom=0.07, hspace=0.25)
+fig.text(0.01, 0.5, 'Average 10 m subsurface temperature ($^o$C)',fontsize=12,
+         va='center', rotation='vertical')
 fig.savefig( 'figures/model_comp_ice_sheet_areas.png',dpi=300)
 
 
+# %% comparison with ERA5 temperature: trend difference
+ds_era_m = xr.open_dataset('Data/ERA5/ERA5_monthly_temp_snowfall.nc')
+ds_era = ds_era_m.resample(time='Y').mean()
+ds_era['sf'] = ds_era_m.sf.resample(time='Y').sum()
+ice = ice.to_crs("EPSG:4326")
+ds_era = ds_era.rio.write_crs('EPSG:4326').rio.clip(ice.geometry.values, ice.crs).rio.reproject("EPSG:3413")
+ds_era = ds_era.sel(time=slice('1985-01-01','2021-12-31'))
+ds_era = ds_era.interp(x=ds_ann_3413["x"], y=ds_ann_3413["y"])
+
+ds_era_dy = ds_era.copy()
+ds_era_dy['time'] = [toYearFraction(d) for d in pd.to_datetime(ds_era_dy.time.values)]
+_, _,slope_era, _, pval_era, _ = linregress_3D(ds_era_dy.time, ds_era_dy.t2m)
+_, _,slope_sf, _, pval_sf, _ = linregress_3D(ds_era_dy.time, ds_era_dy.sf)
+
+ds_ann_dy = ds_ann_3413.resample(time='Y').mean().sel(time=slice('1985-01-01','2021-12-31')).copy()
+ds_ann_dy['time'] = [toYearFraction(d) for d in pd.to_datetime(ds_ann_dy.time.values)]
+
+_, _,slope_ann, _, pval_ann, _ = linregress_3D(ds_ann_dy.time, ds_ann_dy.T10m)
+
+labels = ['A. 1985-2021 trend in 2m \nair temperature',
+          'B. 1985-2021 trend in 10 m \nsubsurface temperature',
+          'C. 1985-2021 trend in snowfall',
+          'D. 1985-2021 trend difference\n bewteen T10m and Ta2m']
+units = ['$^o$C decade$^{-1}$', '$^o$C decade$^{-1}$', 'mm decade$^{-1}$', '$^o$C decade$^{-1}$']
+fig, ax = plt.subplots(2,2,sharex=True,sharey=True, figsize=(10,12))
+ax=ax.flatten()
+vmin = -1
+vmax = 1
+(slope_era*10).plot(ax=ax[0], vmin = vmin, vmax=vmax, cmap='seismic', cbar_kwargs={'label': units[0]})
+X, Y = np.meshgrid(slope_era.x, slope_era.y)
+ax[0].hexbin(X.reshape(-1), Y.reshape(-1), 
+           slope_era.where(pval_era < 0.1).data[:,:].reshape(-1), 
+           gridsize=(50,50), hatch='..', alpha=0)
+        
+(slope_ann*10).plot(ax=ax[1], vmin = vmin, vmax=vmax, cmap='seismic', cbar_kwargs={'label': units[1]})
+X, Y = np.meshgrid(slope_ann.x, slope_ann.y)
+ax[1].hexbin(X.reshape(-1), Y.reshape(-1), 
+           slope_ann.where(pval_ann < 0.1).data[:,:].reshape(-1), 
+           gridsize=(50,50), hatch='..', alpha=0)
+
+(slope_sf*1000*10).plot(ax=ax[2],vmin=-10,vmax=10, cmap='seismic', cbar_kwargs={'label': units[2]})
+X, Y = np.meshgrid(slope_sf.x, slope_sf.y)
+ax[2].hexbin(X.reshape(-1), Y.reshape(-1), 
+           slope_sf.where(pval_sf < 0.1).data[:,:].reshape(-1), 
+           gridsize=(50,50), hatch='..', alpha=0)
+
+(slope_ann*10 - slope_era*10).plot(ax=ax[3], vmin = vmin, vmax=vmax, cmap='seismic', cbar_kwargs={'label': units[3]})
+   
+for i in range(4):
+    ax[i].set_title(labels[i])
+    ax[i].axes.xaxis.set_ticklabels([])
+    ax[i].axes.yaxis.set_ticklabels([])
+    land.plot(ax=ax[i], zorder=0, color="black")
+    ax[i].set_xlabel('')
+    ax[i].set_ylabel('')
+
+# %% T2m vs T10m difference
+x = ds_era_dy.t2m.values.flatten()
+y = ds_ann_dy.T10m.values.flatten()
+
+ind = ~np.isnan(x+y)
+x=x[ind]
+y=y[ind]
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import gaussian_kde
+nbins=300
+k = gaussian_kde([x,y])
+xi, yi = np.mgrid[x.min():x.max():nbins*1j, y.min():y.max():nbins*1j]
+zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+ 
+# Make the plot
+plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto')
+plt.show()
+ 
+# Change color palette
+plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto', cmap=plt.cm.Greens_r)
+plt.colorbar()
+plt.show()

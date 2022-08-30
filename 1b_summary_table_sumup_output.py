@@ -16,7 +16,7 @@ import geopandas as gpd
 
 # import GIS_lib as gis
 matplotlib.rcParams.update({"font.size": 16})
-df = pd.read_csv("subsurface_temperature_summary.csv")
+df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
 
 # ============ To fix ================
 
@@ -58,13 +58,37 @@ for ref in df.reference.unique():
         "\t",
         len(tmp.depthOfTemperatureObservation),
         "\t",
+        len(tmp.site.unique()),
+        "\t",
+        np.array_repr(tmp.site.unique()).replace('\n', ''),
+        "\t",
         str(tmp.year.min()) + "-" + str(tmp.year.max()),
         "\t",
         tmp.reference.values[0],
         "\t",
         tmp.note.unique()[0],
     )
-    
+
+# %%  Looking for duplicates
+duplicate = df[['date','temperatureObserved']].duplicated(keep=False)
+tmp = df.loc[duplicate,:]
+# %% 
+word = 'Steffen'
+tmp = df.loc[np.array([word in ref for ref in df.reference]), :]
+print(tmp)  
+
+for site in tmp.site.unique():
+    print(site)
+    plt.figure()
+    tmp2 = tmp.loc[tmp.site==site] 
+    for note in tmp2.reference.unique():
+        plt.plot(tmp2.loc[tmp2.reference == note,'date'], 
+                 tmp2.loc[tmp2.reference == note,'temperatureObserved'],
+                 marker='o',
+                 linestyle='None',
+                 label=note)
+    plt.title(site)
+    plt.legend()
 # %% plotting Observation uncertainty
 fig, ax = plt.subplots(7, 1, figsize=(13, 15))
 # ax = ax.flatten()
@@ -267,3 +291,55 @@ ax.set_title('Hills et al. (2018)')
 ax.set_xlim([(df_merge.loc[df_merge.temperatureObserved.notnull(), :].index.values[i]) for i in [0, -1]])
 plt.legend()
 
+
+# %% 
+
+# -*- coding: utf-8 -*-
+"""
+@author: bav@geus.dk
+
+tip list:
+    %matplotlib inline
+    %matplotlib qt
+    import pdb; pdb.set_trace()
+"""
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import geopandas as gpd
+import xarray as xr
+from scipy.spatial.distance import cdist
+from progressbar import progressbar
+import time
+# import GIS_lib as gis
+import matplotlib
+from rasterio.crs import CRS
+from rasterio.warp import transform
+ABC = 'ABCDEFGHIJKL'
+
+print('loading dataset')
+df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
+
+df_ambiguous_date = df.loc[pd.to_datetime(df.date, errors="coerce").isnull(), :]
+df = df.loc[~pd.to_datetime(df.date, errors="coerce").isnull(), :]
+
+df_bad_long = df.loc[df.longitude > 0, :]
+df["longitude"] = -df.longitude.abs().values
+
+df_no_coord = df.loc[np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
+df = df.loc[~np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
+
+df_invalid_depth = df.loc[
+    pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
+]
+df = df.loc[
+    ~pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
+]
+
+df_no_elev = df.loc[df.elevation.isnull(), :]
+df = df.loc[~df.elevation.isnull(), :]
+
+df["year"] = pd.DatetimeIndex(df.date).year
+dates = pd.DatetimeIndex(df.date)
+
+df[['latitude','longitude','elevation','date','depthOfTemperatureObservation','temperatureObserved']].to_csv('add_to_sumup_v1.csv',index=False)

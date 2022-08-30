@@ -70,7 +70,7 @@ df['time_era'] = np.nan
 df['t2m_amp'] = np.nan
 
 coords_uni = np.unique(df[['latitude','longitude']].values, axis=0)
-print('interpolating ERAat the observation sites')
+print('interpolating ERA at the observation sites')
 x = xr.DataArray(coords_uni[:,0],dims='points')
 y = xr.DataArray(coords_uni[:,1],dims='points')
 ds_interp = ds_era.interp(latitude=x, longitude=y, method="linear")

@@ -270,22 +270,13 @@ for site in sites_all:
     df_PROMICE = df_PROMICE.append(df_10.reset_index())
 
 df_PROMICE = df_PROMICE.loc[df_PROMICE.temperatureObserved.notnull(), :]
-df_PROMICE[
-    "reference"
-] = "Fausto, R.S. and van As, D., (2019). Programme for monitoring of the Greenland ice sheet (PROMICE): Automatic weather station data. Version: v03, Dataset published via Geological Survey of Denmark and Greenland. DOI: https://doi.org/10.22008/promice/data/aws"
-
 
 df_PROMICE = df_PROMICE.set_index("date")
-df_PROMICE_month_first = (
-    df_PROMICE.groupby("site").resample("M").first().reset_index("site", drop=True)
-)
+
 df_PROMICE_month_mean = (
     df_PROMICE.groupby("site").resample("M").mean().reset_index("site")
 )
-for col in df_PROMICE_month_first.columns:
-    if col not in df_PROMICE_month_mean.columns:
-        print(col)
-        df_PROMICE_month_mean[col] = df_PROMICE_month_first[col]
+
 df_PROMICE_month_mean.to_csv("Data/PROMICE/PROMICE_10m_firn_temperature.csv", sep=";")
 
 # %% Plotting
