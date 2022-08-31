@@ -62,41 +62,43 @@ def write_geotiff(var, name_out, ref_raster_info, deflate=True):
     with rasterio.open(name_out, "w+", **ref_raster_info) as dst:
         dst.write(var, 1)
 
+
 from rasterio.warp import transform
 import rioxarray
 
-def get_lat_lon_from_raster(filename, write_files = True):
+
+def get_lat_lon_from_raster(filename, write_files=True):
     da = rioxarray.open_rasterio(filename).squeeze()
     da = da.rio.write_crs(3413)
 
     # Compute the lon/lat coordinates with rasterio.warp.transform
-    ny, nx = len(da['y']), len(da['x'])
-    x, y = np.meshgrid(da['x'], da['y'])
+    ny, nx = len(da["y"]), len(da["x"])
+    x, y = np.meshgrid(da["x"], da["y"])
 
     # Rasterio works with 1D arrays
-    lon, lat = transform(da.rio.crs, {'init': 'EPSG:4326'},
-                         x.flatten(), y.flatten())
+    lon, lat = transform(da.rio.crs, {"init": "EPSG:4326"}, x.flatten(), y.flatten())
     lon = np.asarray(lon).reshape((ny, nx))
     lat = np.asarray(lat).reshape((ny, nx))
 
     if write_files:
         da.values = lon
-        da.rio.to_raster('lon.tif')
+        da.rio.to_raster("lon.tif")
         da.values = lat
-        da.rio.to_raster('lat.tif')
+        da.rio.to_raster("lat.tif")
     return lat, lon
 
 
 def plot_geotiff(raster_in, ax, cmap, vmin, vmax, cbar_label):
     raster = raster_in.read(1)
-    raster[raster==raster_in.nodata]=np.nan
+    raster[raster == raster_in.nodata] = np.nan
     tmp2, cbar2 = ep.plot_bands(
         raster,
         extent=plotting_extent(raster_in),
         cmap=cmap,
         vmin=vmin,
         vmax=vmax,
-        ax=ax)
+        ax=ax,
+    )
     cbar2.ax.set_ylabel(cbar_label, fontsize=16)
     cbar2.ax.tick_params(axis="y", labelsize=16)
     return tmp2, cbar2

@@ -23,11 +23,23 @@ np.seterr(invalid="ignore")
 
 #%% Adding PROMICE observations
 # Array information of stations available at PROMICE official site: https://promice.org/WeatherStations.html
-PROMICE_stations = pd.read_csv('Data/PROMICE/PROMICE_coordinates_2015.csv', sep=';')
+PROMICE_stations = pd.read_csv("Data/PROMICE/PROMICE_coordinates_2015.csv", sep=";")
 
 # removing stations that are outside of the ice sheet
-PROMICE_stations = PROMICE_stations.loc[~np.isin(PROMICE_stations['Station name'], ['MIT','NUK_K','KAN_B','NUK_N', 'TAS_U']),:]
-PROMICE_stations = [ (PROMICE_stations.iloc[i,0], (PROMICE_stations.iloc[i,1], PROMICE_stations.iloc[i,2]), PROMICE_stations.iloc[i,3]) for i in range(PROMICE_stations.shape[0])]
+PROMICE_stations = PROMICE_stations.loc[
+    ~np.isin(
+        PROMICE_stations["Station name"], ["MIT", "NUK_K", "KAN_B", "NUK_N", "TAS_U"]
+    ),
+    :,
+]
+PROMICE_stations = [
+    (
+        PROMICE_stations.iloc[i, 0],
+        (PROMICE_stations.iloc[i, 1], PROMICE_stations.iloc[i, 2]),
+        PROMICE_stations.iloc[i, 3],
+    )
+    for i in range(PROMICE_stations.shape[0])
+]
 
 path_to_PROMICE = "C:/Users/bav/OneDrive - Geological survey of Denmark and Greenland/Code/PROMICE/PROMICE-AWS-toolbox/out/v03_L3"
 PROMICE = pd.DataFrame()
@@ -36,15 +48,13 @@ for ws in PROMICE_stations:
     print(ws)
     filepath = path_to_PROMICE + "/" + ws[0] + "_hour_v03_L3.txt"
 
-    df = (
-        pd.read_csv(filepath, sep="\t", index_col=0, parse_dates=True, na_values=-999)
-    )
+    df = pd.read_csv(filepath, sep="\t", index_col=0, parse_dates=True, na_values=-999)
     df = df[
         [
             "Year",
             "MonthOfYear",
             "DayOfYear",
-            'HourOfDay(UTC)',
+            "HourOfDay(UTC)",
             "AirTemperature(C)",
             "AirTemperatureHygroClip(C)",
             "SurfaceTemperature(C)",
@@ -71,7 +81,7 @@ PROMICE.rename(
     columns={
         "Year": "year",
         "DayOfYear": "dayofyear",
-        'HourOfDay(UTC)': "hourUTC",
+        "HourOfDay(UTC)": "hourUTC",
         "IceTemperature1(C)": "rtd0",
         "IceTemperature2(C)": "rtd1",
         "IceTemperature3(C)": "rtd2",
@@ -84,9 +94,11 @@ PROMICE.rename(
     },
     inplace=True,
 )
-PROMICE["date"] = (np.asarray(PROMICE["year"], dtype="datetime64[Y]") - 1970) + (
-    np.asarray(PROMICE["dayofyear"], dtype="timedelta64[D]") - 1
-) +  np.asarray(PROMICE["hourUTC"], dtype="timedelta64[h]")
+PROMICE["date"] = (
+    (np.asarray(PROMICE["year"], dtype="datetime64[Y]") - 1970)
+    + (np.asarray(PROMICE["dayofyear"], dtype="timedelta64[D]") - 1)
+    + np.asarray(PROMICE["hourUTC"], dtype="timedelta64[h]")
+)
 
 PROMICE.drop(["year", "MonthOfYear", "dayofyear", "hourUTC"], axis=1, inplace=True)
 PROMICE.set_index(["sitename", "date"], inplace=True)
@@ -233,7 +245,7 @@ for site in sites_all:
         # PROMICE.loc[site,'rtd'+str(i)] = PROMICE.loc[site,'rtd'+str(i)].interpolate(limit=14).values
 
 # PROMICE.to_csv('KAN_U_PROMICE_thermistor.csv')
- 
+
 # plt.figure()
 # for i in range(1,9):
 #     df['IceTemperature'+str(i)+'(C)'].plot()
@@ -284,19 +296,23 @@ for site in sites_all:
     print(site)
 
     fig, ax = plt.subplots(1, 2, figsize=(15, 6))
-    plt.subplots_adjust(left= 0.05, right = 0.95, wspace=0.15,top=0.95)
-    PROMICE.loc[site, "surface_height_summary"].plot(ax=ax[0],
-                                                     color = 'black', 
-                                                     label='surface',
-                                                     linewidth = 3)
+    plt.subplots_adjust(left=0.05, right=0.95, wspace=0.15, top=0.95)
+    PROMICE.loc[site, "surface_height_summary"].plot(
+        ax=ax[0], color="black", label="surface", linewidth=3
+    )
     (PROMICE.loc[site, "surface_height_summary"] - 10).plot(
-        ax=ax[0], color="red", linestyle="-",linewidth=4, label= '10 m depth',
+        ax=ax[0],
+        color="red",
+        linestyle="-",
+        linewidth=4,
+        label="10 m depth",
     )
     maintenance = maintenance_string.loc[maintenance_string.Station == site]
 
     for i, col in enumerate(depth_cols_name):
         (-PROMICE.loc[site, col] + PROMICE.loc[site, "surface_height_summary"]).plot(
-            ax=ax[0], label='_nolegend_',
+            ax=ax[0],
+            label="_nolegend_",
         )
 
     if len(maintenance.date) > 0:
@@ -355,7 +371,11 @@ for site in sites_all:
         ind_filter.loc[np.isin(month, [5, 6, 7])] = False
         if any(ind_filter):
             tmp.loc[ind_filter].plot(
-                ax=ax[1], marker="o", linestyle="none", color="lightgray", label="_nolegend_"
+                ax=ax[1],
+                marker="o",
+                linestyle="none",
+                color="lightgray",
+                label="_nolegend_",
             )
 
         # before and after maintenance adaptation filter
@@ -396,9 +416,14 @@ for site in sites_all:
     else:
         df_PROMICE.loc[df_PROMICE.site == site, "temperatureObserved"].resample(
             "W"
-        ).mean().plot(ax=ax[1],color='red', linewidth=5, label="10 m temperature")
+        ).mean().plot(ax=ax[1], color="red", linewidth=5, label="10 m temperature")
     ax[1].plot(
-        np.nan, np.nan, marker="o", linestyle="none", color="lightgray", label="filtered"
+        np.nan,
+        np.nan,
+        marker="o",
+        linestyle="none",
+        color="lightgray",
+        label="filtered",
     )
     # ax[1].plot(
     #     np.nan,
@@ -413,7 +438,7 @@ for site in sites_all:
     # )
     ax[1].legend()
     ax[0].legend()
-    ax[0].set_ylabel('Height (m)')
-    ax[1].set_ylabel('Subsurface temperature ($^o$C)')
+    ax[0].set_ylabel("Height (m)")
+    ax[1].set_ylabel("Subsurface temperature ($^o$C)")
     fig.suptitle(site)
     fig.savefig("figures/PROMICE/PROMICE_" + site + ".png", dpi=90)

@@ -14,6 +14,7 @@ import pandas as pd
 import numpy as np
 import sys
 import firn_temp_lib as ftl
+
 # from sklearn.linear_model import LinearRegression
 
 # %% Old GC-Net stations not processed in Vandecrux et al. 2020
@@ -168,47 +169,259 @@ meta = pd.read_csv("Data/GCNv2/metadata.txt", sep="\t")
 df_gcn2 = pd.DataFrame()
 import shutil
 
-for site in meta.site_short: # 
+for site in meta.site_short:  #
     print(site)
     if site in ["JAR", "CEN2"]:
         print("no thermistor string intalled")
         continue
 
-        
     IMEI = meta.loc[meta.site_short == site, "IMEI"].values[0]
     if site in ["SDL"]:
-        filename = 'Data/GCNv2//TOA5_23810.DataTable10min.dat'
+        filename = "Data/GCNv2//TOA5_23810.DataTable10min.dat"
     else:
-        filename = 'Data/GCNv2/AWS_'+str(IMEI)+'.txt'
+        filename = "Data/GCNv2/AWS_" + str(IMEI) + ".txt"
     # break
     # trying to copy most recent files:
     try:
-        shutil.copyfile('G:/test/aws_data/AWS_'+str(IMEI)+'.txt', 'Data/GCNv2/AWS_'+str(IMEI)+'.txt')
-    except: 
-        print('cannot copy latest file, using local file instead')    
-        
+        shutil.copyfile(
+            "G:/test/aws_data/AWS_" + str(IMEI) + ".txt",
+            "Data/GCNv2/AWS_" + str(IMEI) + ".txt",
+        )
+    except:
+        print("cannot copy latest file, using local file instead")
 
-    cols = [ "time", "counter", "Pressure_L", "Pressure_U", "Asp_temp_L", "Asp_temp_U","Humidity_L", "Humidity_U", "WindSpeed_L", "WindDirection_L", "WindSpeed_U","WindDirection_U", "SWUpper", "SWLower", "LWUpper", "LWLower","TemperatureRadSensor","SR1", "SR2", "thermistorstring_1", "thermistorstring_2","thermistorstring_3", "thermistorstring_4", "thermistorstring_5","thermistorstring_6", "thermistorstring_7", "thermistorstring_8","thermistorstring_9", "thermistorstring_10", "thermistorstring_11", "Roll","Pitch", "Heading", "Rain_amount_L", "Rain_amount_U", "Gtime", "latitude", "longitude","altitude", "HDOP", "FanCurrent_L", "FanCurrent_U", "BattVolt", "PressureMinus1000_L","Asp_temp_L2", "Humidity_L", "WindSpeed_S_L", "WindDirection_S_L", "?" ]
+    cols = [
+        "time",
+        "counter",
+        "Pressure_L",
+        "Pressure_U",
+        "Asp_temp_L",
+        "Asp_temp_U",
+        "Humidity_L",
+        "Humidity_U",
+        "WindSpeed_L",
+        "WindDirection_L",
+        "WindSpeed_U",
+        "WindDirection_U",
+        "SWUpper",
+        "SWLower",
+        "LWUpper",
+        "LWLower",
+        "TemperatureRadSensor",
+        "SR1",
+        "SR2",
+        "thermistorstring_1",
+        "thermistorstring_2",
+        "thermistorstring_3",
+        "thermistorstring_4",
+        "thermistorstring_5",
+        "thermistorstring_6",
+        "thermistorstring_7",
+        "thermistorstring_8",
+        "thermistorstring_9",
+        "thermistorstring_10",
+        "thermistorstring_11",
+        "Roll",
+        "Pitch",
+        "Heading",
+        "Rain_amount_L",
+        "Rain_amount_U",
+        "Gtime",
+        "latitude",
+        "longitude",
+        "altitude",
+        "HDOP",
+        "FanCurrent_L",
+        "FanCurrent_U",
+        "BattVolt",
+        "PressureMinus1000_L",
+        "Asp_temp_L2",
+        "Humidity_L",
+        "WindSpeed_S_L",
+        "WindDirection_S_L",
+        "?",
+    ]
 
-    values = [str, str, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float ]
-    
-    firn_temp_cols = [  "thermistorstring_1",  "thermistorstring_2",  "thermistorstring_3", "thermistorstring_4", "thermistorstring_5", "thermistorstring_6", "thermistorstring_7", "thermistorstring_8", "thermistorstring_9",  "thermistorstring_10", "thermistorstring_11",
+    values = [
+        str,
+        str,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+        float,
+    ]
+
+    firn_temp_cols = [
+        "thermistorstring_1",
+        "thermistorstring_2",
+        "thermistorstring_3",
+        "thermistorstring_4",
+        "thermistorstring_5",
+        "thermistorstring_6",
+        "thermistorstring_7",
+        "thermistorstring_8",
+        "thermistorstring_9",
+        "thermistorstring_10",
+        "thermistorstring_11",
     ]
     depth_cols = ["depth_" + str(i) for i in range(1, 1 + len(firn_temp_cols))]
     depth_ini_val = [0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 6, 8, 10]
     if site in ["SWC", "JAR"]:
         # SWC and JAR are PROMICE-type stations
-        cols = [ "time", "counter", "Pressure", "Asp_temp", "Humidity", "WindSpeed","WindDirection", "SWUpper", "SWLower", "LWUpper", "LWLower", "TemperatureRadSensor","SR1", "SR2", "IceHeight", "thermistorstring_1", "thermistorstring_2","thermistorstring_3", "thermistorstring_4", "thermistorstring_5","thermistorstring_6", "thermistorstring_7", "thermistorstring_8", "Roll","Pitch", "Rain_amount", "TimeGPS", "Heading", "latitude", "longitude", "altitude","Rain_amount", "Rain_amount2", "counterx", "ss", "Giodal", "GeoUnit", "Battery","NumberSatellites", "HDOP", "FanCurrent", "FanCurrent2", "Quality", "LoggerTemp", "?1","?2"]
+        cols = [
+            "time",
+            "counter",
+            "Pressure",
+            "Asp_temp",
+            "Humidity",
+            "WindSpeed",
+            "WindDirection",
+            "SWUpper",
+            "SWLower",
+            "LWUpper",
+            "LWLower",
+            "TemperatureRadSensor",
+            "SR1",
+            "SR2",
+            "IceHeight",
+            "thermistorstring_1",
+            "thermistorstring_2",
+            "thermistorstring_3",
+            "thermistorstring_4",
+            "thermistorstring_5",
+            "thermistorstring_6",
+            "thermistorstring_7",
+            "thermistorstring_8",
+            "Roll",
+            "Pitch",
+            "Rain_amount",
+            "TimeGPS",
+            "Heading",
+            "latitude",
+            "longitude",
+            "altitude",
+            "Rain_amount",
+            "Rain_amount2",
+            "counterx",
+            "ss",
+            "Giodal",
+            "GeoUnit",
+            "Battery",
+            "NumberSatellites",
+            "HDOP",
+            "FanCurrent",
+            "FanCurrent2",
+            "Quality",
+            "LoggerTemp",
+            "?1",
+            "?2",
+        ]
 
-        values = [ str, str, float, float, float, float, float, float, float, float, float, float,float, float, float, float, float, float, float, float, float, float, float, float, float,float, float, float, float, float, float, float, float, float, float, float, float, float,float, float, float, float, float, float, float, float]
+        values = [
+            str,
+            str,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+            float,
+        ]
         firn_temp_cols = [
-            "thermistorstring_1",  "thermistorstring_2", "thermistorstring_3",
-            "thermistorstring_4",  "thermistorstring_5",  "thermistorstring_6",
-            "thermistorstring_7", "thermistorstring_8",
+            "thermistorstring_1",
+            "thermistorstring_2",
+            "thermistorstring_3",
+            "thermistorstring_4",
+            "thermistorstring_5",
+            "thermistorstring_6",
+            "thermistorstring_7",
+            "thermistorstring_8",
         ]
         depth_cols = ["depth_" + str(i) for i in range(1, 1 + len(firn_temp_cols))]
         depth_ini_val = [1, 2, 3, 4, 5, 6, 7, 10]
-        
+
     try:
         if site == "SWC":
             df = pd.read_csv(
@@ -219,11 +432,13 @@ for site in meta.site_short: #
             )
         elif site == "SDL":
             df = pd.read_csv(filename, skiprows=5, low_memory=False)
-            cols.append('?')
+            cols.append("?")
             df.columns = cols
-            df.time = pd.to_datetime(df.time) - pd.Timedelta(days=365*102-88, minutes=8, seconds=16)
+            df.time = pd.to_datetime(df.time) - pd.Timedelta(
+                days=365 * 102 - 88, minutes=8, seconds=16
+            )
         else:
-            df = pd.read_csv(filename,  index_col=None, header=None)
+            df = pd.read_csv(filename, index_col=None, header=None)
             df.columns = cols
 
         df = df.astype(dict(zip(cols, values)), errors="ignore")
@@ -276,15 +491,15 @@ for site in meta.site_short: #
     # creating depth columns
     hs1 = df.SR1 * np.sqrt((df.Asp_temp_L + 273.15) / 273.15)
     hs2 = df.SR2 * np.sqrt((df.Asp_temp_U + 273.15) / 273.15)
-    hs1.loc[hs1<1] = np.nan
-    hs2.loc[hs2<1] = np.nan
-    if site == 'NEEM':
-        hs1.loc[hs1>3] = np.nan
-        hs2.loc[hs2>4] = np.nan
-    elif site == 'NSU':
-        df.loc['2021-12-08':'2021-12-17',firn_temp_cols[-1]] = np.nan
+    hs1.loc[hs1 < 1] = np.nan
+    hs2.loc[hs2 < 1] = np.nan
+    if site == "NEEM":
+        hs1.loc[hs1 > 3] = np.nan
+        hs2.loc[hs2 > 4] = np.nan
+    elif site == "NSU":
+        df.loc["2021-12-08":"2021-12-17", firn_temp_cols[-1]] = np.nan
     hs_summary = (hs1 + hs2) / 2
-    hs_summary = hs_summary[hs_summary.first_valid_index()] - hs_summary 
+    hs_summary = hs_summary[hs_summary.first_valid_index()] - hs_summary
     hs_summary = hs_summary.rolling(24, center=True, min_periods=1).mean()
 
     plt.figure()

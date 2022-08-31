@@ -15,13 +15,15 @@ import xarray as xr
 from scipy.spatial.distance import cdist
 from progressbar import progressbar
 import time
+
 # import GIS_lib as gis
 import matplotlib
 from rasterio.crs import CRS
 from rasterio.warp import transform
-ABC = 'ABCDEFGHIJKL'
 
-print('loading dataset')
+ABC = "ABCDEFGHIJKL"
+
+print("loading dataset")
 df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
 
 df_ambiguous_date = df.loc[pd.to_datetime(df.date, errors="coerce").isnull(), :]
@@ -46,4 +48,13 @@ df = df.loc[~df.elevation.isnull(), :]
 df["year"] = pd.DatetimeIndex(df.date).year
 dates = pd.DatetimeIndex(df.date)
 
-df[['latitude','longitude','elevation','date','depthOfTemperatureObservation','temperatureObserved']].to_csv('add_to_sumup_v1.csv',index=False)
+df[
+    [
+        "latitude",
+        "longitude",
+        "elevation",
+        "date",
+        "depthOfTemperatureObservation",
+        "temperatureObserved",
+    ]
+].to_csv("add_to_sumup_v1.csv", index=False)

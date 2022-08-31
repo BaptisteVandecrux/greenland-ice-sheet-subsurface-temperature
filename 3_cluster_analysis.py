@@ -171,6 +171,7 @@ gdf = gdf.set_index(["clusters", "date"])
 i = -1
 
 import matplotlib.cm as cm
+
 # cmap = cm.get_cmap('tab20', len(ref_all))    # PiYG
 # cmap.set_under('b')
 # cmap.set_over('b')
@@ -178,7 +179,7 @@ handles = list()
 labels = list()
 import matplotlib.dates as mdates
 
-for cluster_id in [7]: #unique_labels:
+for cluster_id in [7]:  # unique_labels:
     if cluster_id == -1:
         continue
 
@@ -190,23 +191,35 @@ for cluster_id in [7]: #unique_labels:
         print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year))
 
         # i = i+1
-        fig, ax = plt.subplots(1,1, figsize=(20, 20))
-        ax=[ax]
-        i=0
+        fig, ax = plt.subplots(1, 1, figsize=(20, 20))
+        ax = [ax]
+        i = 0
         for ref in ref_list:
-            if ref == 'FirnCover':
+            if ref == "FirnCover":
                 tmp.loc[tmp.reference_short == ref].temperatureObserved.plot(
-                ax=ax[i], marker="o", markersize=6, linestyle="none", label=ref ,color='tab:red')
-            elif ref == 'Covi et al.':
+                    ax=ax[i],
+                    marker="o",
+                    markersize=6,
+                    linestyle="none",
+                    label=ref,
+                    color="tab:red",
+                )
+            elif ref == "Covi et al.":
                 tmp.loc[tmp.reference_short == ref].temperatureObserved.plot(
-                ax=ax[i], marker="o", markersize=6, linestyle="none", color='tab:blue', label=ref )
+                    ax=ax[i],
+                    marker="o",
+                    markersize=6,
+                    linestyle="none",
+                    color="tab:blue",
+                    label=ref,
+                )
             else:
                 tmp.loc[tmp.reference_short == ref].temperatureObserved.plot(
-                ax=ax[i], marker="o", markersize=6, linestyle="none", label=ref )
-            
+                    ax=ax[i], marker="o", markersize=6, linestyle="none", label=ref
+                )
 
-        ax[i].set_ylabel('Temperature 10 m below the surface ($^oC$)')
-        ax[i].set_xlabel('')
+        ax[i].set_ylabel("Temperature 10 m below the surface ($^oC$)")
+        ax[i].set_xlabel("")
         ax[i].set_title(str(np.unique(tmp.site)))
         ax[i].legend()
 
@@ -214,4 +227,4 @@ for cluster_id in [7]: #unique_labels:
     #     ax[i].set_xticklabels('')
 
 # fig.text(0.05, 0.7, "10 m subsurface temperature ($^o$C)", ha='center', va='center', rotation='vertical',fontsize=12)
-fig.savefig('figures/clusters/clusters_all.png')
+fig.savefig("figures/clusters/clusters_all.png")
