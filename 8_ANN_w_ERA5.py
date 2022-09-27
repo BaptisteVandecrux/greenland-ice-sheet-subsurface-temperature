@@ -20,7 +20,7 @@ import progressbar
 import matplotlib
 import wandb
 
-df = pd.read_csv("10m_temperature_dataset_monthly.csv")
+df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
 
 # ============ To fix ================
 
@@ -42,6 +42,9 @@ df = df.loc[
 
 df_no_elev = df.loc[df.elevation.isnull(), :]
 df = df.loc[~df.elevation.isnull(), :]
+
+df_too_cold = df.loc[df.temperatureObserved<-42, :]
+df = df.loc[df.temperatureObserved>=-42, :]
 
 df["year"] = pd.DatetimeIndex(df.date).year
 
@@ -199,7 +202,7 @@ if produce_input_grid:
         )
     ds_era.to_netcdf("era5_monthly_plus_predictors.nc")
 
-ds_era = xr.open_dataset("era5_monthly_plus_predictors.nc")
+ds_era = xr.open_dataset("output/era5_monthly_plus_predictors.nc")
 
 # %% Representativity of the dataset
 
@@ -310,9 +313,11 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from keras.layers import GaussianNoise
 
 
-def train_ANN(df, Predictors, TargetVariable="temperatureObserved", calc_weights=False):
+def train_ANN(df, Predictors, TargetVariable="temperatureObserved",
+              calc_weights=False, num_nodes = 40, num_layers = 2):
     if calc_weights:
         for i in range(len(Predictors)):
             hist1 = target_hist[i]
@@ -335,23 +340,116 @@ def train_ANN(df, Predictors, TargetVariable="temperatureObserved", calc_weights
     y = TargetVarScalerFit.transform(y)
 
     # create and fit ANN model
-    from keras.layers import GaussianNoise
 
     model = Sequential()
-    model.add(Dense(units=40, input_dim=len(Predictors)))
-    model.add(GaussianNoise(0.1))
-    model.add(Dense(units=40, activation="relu"))
-    model.add(Dense(units=40, activation="relu"))
+    model.add(GaussianNoise(0.01, input_shape=(len(Predictors),)))
+    for i in range(num_layers):
+        model.add(Dense(units=num_nodes, activation="relu"))
     model.add(Dense(1))
     model.compile(loss="mean_squared_error", optimizer="adam")
-    model.fit(X, y, batch_size=30, epochs=30, verbose=0, sample_weight=w)
+    model.fit(X, y, batch_size=200, epochs=1000, verbose=0, sample_weight=w)
     return model, PredictorScalerFit, TargetVarScalerFit
 
+  
+fig, ax = plt.subplots(2, 3, figsize=(15, 15))
+ax = ax.flatten()
+for k, site in enumerate(["DYE-2", "KAN_U", "CEN", 'KPC_U', 'QAS_U']):
+    df_select = df.loc[df.site == site, :].copy()
 
-model, PredictorScalerFit, TargetVarScalerFit = train_ANN(
-    df, Predictors, TargetVariable="temperatureObserved", calc_weights=False
+    ax[k+1].plot(
+        df_select.date,
+        df_select.temperatureObserved,
+        "x",
+        # linestyle="None",
+        label="observations",
+    )
+    ax[k+1].set_title(site)
+    
+Predictors = (
+    ["month", "t2m_amp", "t2m_avg", "sf_avg"]
+    # + ["sf_" + str(i) for i in range(firn_memory)]
+    # + ["t2m_" + str(i) for i in range(firn_memory)]
 )
+df['month'] = (pd.DatetimeIndex(df['date']).month-1)/11
+    
+for i in range(5):
+    print(i)
+    model, PredictorScalerFit, TargetVarScalerFit = train_ANN(
+        df, Predictors, num_nodes = 20, num_layers=2
+    )
+    
+    def ANN_model(df, model):
+        X = PredictorScalerFit.transform(df.values)
+        Y = model.predict(X)
+        Predictions = pd.DataFrame(
+            data=TargetVarScalerFit.inverse_transform(Y),
+            index=df.index,
+            columns=["temperaturePredicted"],
+        ).temperaturePredicted
+        Predictions.loc[Predictions > 0] = 0
+        return Predictions
+    
 
+    for k, site in enumerate(["DYE-2", "KAN_U", "CEN", 'KPC_U', 'QAS_U']):
+        df_select = df.loc[df.site == site, :].copy()
+        df_select['T10m_pred'] = ANN_model(df_select[Predictors], model).values
+        df_select = df_select.sort_values('date')
+        ax[k+1].plot(df_select.date, df_select.T10m_pred,
+                   label="best model")
+T10m_pred_all = ANN_model(df[Predictors], model)
+ax[0].plot(T10m_pred_all, df.temperatureObserved,
+             linestyle='None', marker='.')
+text = 'ME = %0.2f\n RMSE = %0.2f' % ((T10m_pred_all-df.temperatureObserved).mean(),
+                                      np.sqrt(((T10m_pred_all-df.temperatureObserved)**2).mean()))
+ax[0].annotate(text, (0.1,0.9), xycoords='axes fraction')
+ax[0].plot([-35, 0], [-35, 0], 'k')
+ax[0].set_xlim(-35, 0)
+ax[0].set_ylim(-35, 0)
+for k in range(5):
+    ax[k+1].set_ylim(-21, 0)
+    
+# %% GridSearch
+def create_model(n_layers, num_nodes):
+    model = Sequential()
+    model.add(GaussianNoise(0.01, input_shape=(len(Predictors),)))
+    for i in range(n_layers):
+        model.add(Dense(units=num_nodes, activation="relu"))
+    model.add(Dense(1))
+    model.compile(loss="mean_squared_error", optimizer="adam")
+    return model
+
+w = df["weights"].values
+X = df[Predictors].values
+y = df["temperatureObserved"].values.reshape(-1, 1)
+
+# Sandardization of data
+PredictorScalerFit = StandardScaler().fit(X)
+TargetVarScalerFit = StandardScaler().fit(y)
+
+X = PredictorScalerFit.transform(X)
+y = TargetVarScalerFit.transform(y)
+  
+# create model
+from scikeras.wrappers import KerasClassifier
+from sklearn.model_selection import GridSearchCV
+model = KerasClassifier(build_fn=create_model, verbose=0, n_layers=[1, 2], num_nodes = [16, 32])
+
+# define the grid search parameters
+# batch_size = [10, 20, 100]
+# epochs = [10, 50, 100]
+# param_grid = dict(batch_size=batch_size, epochs=epochs)
+# grid = GridSearchCV(estimator=model, param_grid=param_grid, n_jobs=-1, cv=3)
+param_grid = dict(batch_size = [100, 1000], epochs = [20,60,500])
+grid = GridSearchCV(estimator = model  #, param_grid = param_grid)
+grid_result = grid.fit(X, y)
+
+# summarize results
+print("Best: %f using %s" % (grid_result.best_score_, grid_result.best_params_))
+means = grid_result.cv_results_['mean_test_score']
+stds = grid_result.cv_results_['std_test_score']
+params = grid_result.cv_results_['params']
+for mean, stdev, param in zip(means, stds, params):
+    print("%f (%f) with: %r" % (mean, stdev, param))
 # %% spatial cross-validation:
 print("fitting cross-validation models")
 zwally = gpd.GeoDataFrame.from_file("Data/misc/Zwally_10_zones_3413.shp")
@@ -382,16 +480,7 @@ for i in range(zwally.shape[0]):
 df = df.sort_values("date")
 
 
-def ANN_model(df, model):
-    X = PredictorScalerFit.transform(df.values)
-    Y = model.predict(X)
-    Predictions = pd.DataFrame(
-        data=TargetVarScalerFit.inverse_transform(Y),
-        index=df.index,
-        columns=["temperaturePredicted"],
-    ).temperaturePredicted
-    Predictions.loc[Predictions > 0] = 0
-    return Predictions
+
 
 
 def ANN_model_cv(df_pred, model_list):

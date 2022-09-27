@@ -41,7 +41,7 @@ def interpolate_temperature(
 
     # preprocessing temperatures for small gaps
     tmp = pd.DataFrame(temp)
-    tmp["time"] = dates.values
+    tmp["time"] = dates
     tmp = tmp.set_index("time")
     tmp = tmp.resample("H").mean()
     # tmp = tmp.interpolate(limit=24*7)

@@ -550,7 +550,7 @@ lon = [
 elev = [2022, 2369, 3254, 2113, 2165, 2559, 2922, 2631, 2425]
 
 df_gcnet = pd.DataFrame()
-for ii, site in progressbar.progressbar(enumerate(sites)):
+for ii, site in (enumerate(sites)):
     ds = xr.open_dataset("Data/Vandecrux et al. 2020/" + site + "_T_firn_obs.nc")
     df = ds.to_dataframe()
     df = df.reset_index(1).groupby("level").resample("D").mean()
@@ -570,12 +570,12 @@ for ii, site in progressbar.progressbar(enumerate(sites)):
         df_d[["rtd" + str(i) for i in range(1, 11)]].values,
         title=site + " GC-Net",
     )
+
+    df_10 = df_10.set_index("date").resample("M").mean().reset_index()
     df_10["site"] = site
     df_10["latitude"] = lat[ii]
     df_10["longitude"] = lon[ii]
     df_10["elevation"] = elev[ii]
-    df_10 = df_10.set_index("date").resample("M").first().reset_index()
-
     df_gcnet = df_gcnet.append(df_10)
 
 df_gcnet[
@@ -756,7 +756,7 @@ for k, site in enumerate(["FA_13", "FA_15_1", "FA_15_2"]):
         dates, depth_cor, temp.values, title=site + " Miller et al. (2020)"
     )
     df_10.loc[np.greater(df_10["temperatureObserved"], 0), "temperatureObserved"] = 0
-    df_10 = df_10.set_index("date", drop=False).resample("M").first()
+    df_10 = df_10.set_index("date", drop=False).resample("M").mean()
     df_10["site"] = site
     df_10["latitude"] = float(metadata[k, 1])
     df_10["longitude"] = -float(metadata[k, 2])
@@ -769,9 +769,9 @@ for k, site in enumerate(["FA_13", "FA_15_1", "FA_15_2"]):
     df_10["note"] = "interpolated to 10 m, monthly snapshot"
     # plt.figure()
     # df_10.temperatureObserved.plot()
-    df_miege = df_miege.append(df_10)
+    df_miege = df_miege.append(df_10.reset_index())
 
-df_miege["method"] = "digital Thermarray system from RST©"
+df_miege["method"] = "digital thermarray system from RST©"
 df_miege["durationOpen"] = 0
 df_miege["durationMeasured"] = 30
 df_miege["error"] = 0.07
@@ -927,13 +927,13 @@ for site in sites:
         df_d[["rtd" + str(i) for i in range(24)]].values,
         title=site + " FirnCover",
     )
+    df_10 = df_10.set_index("date").resample("M").mean().reset_index()
     df_10["site"] = site
     if site == "Crawford":
         df_10["site"] = "CP1"
     df_10["latitude"] = statmeta_df.loc[site, "latitude"]
     df_10["longitude"] = statmeta_df.loc[site, "longitude"]
     df_10["elevation"] = statmeta_df.loc[site, "elevation"]
-    df_10 = df_10.set_index("date").resample("M").first().reset_index()
 
     df_firncover = df_firncover.append(df_10)
 df_firncover[
@@ -1007,11 +1007,12 @@ for k, note in enumerate(["SPLAZ_main", "SPLAZ_2", "SPLAZ_3"]):
     #     plt.title(df2.index[i*20])
     #     plt.xlim(-15,0)
 
+    df_10 = df_10.set_index("date").resample("M").mean().reset_index()
+
     df_10["note"] = note
     df_10["latitude"] = 67.000252
     df_10["longitude"] = -47.022999
     df_10["elevation"] = 1840
-    df_10 = df_10.set_index("date").resample("M").first().reset_index()
     df_splaz = df_splaz.append(df_10)
 df_splaz[
     "reference"
@@ -1406,6 +1407,8 @@ df.loc["2018-05-18":, "depth_2"] = df.loc["2018-05-18":, "depth_2"].values - 1.8
 df_achim = ftl.interpolate_temperature(
     df.index, df[depth_label].values, df[temp_label].values, title="Dye-2 Achim"
 )
+df_achim = df_achim.set_index("date").resample("M").mean().reset_index()
+
 df_achim["site"] = "DYE-2"
 df_achim["latitude"] = 66.4800
 df_achim["longitude"] = -46.2789
@@ -1422,7 +1425,6 @@ df_achim["method"] = "thermistors"
 df_achim["durationOpen"] = 0
 df_achim["durationMeasured"] = 30 * 24
 df_achim["error"] = 0.25
-df_achim = df_achim.set_index("date").resample("M").first().reset_index()
 
 df_all = df_all.append(
     df_achim[
@@ -1449,7 +1451,7 @@ df_all = df_all.append(
 
 # %% Camp Century Climate
 print("Loading Camp Century data")
-df = pd.read_csv("Data/Camp Century Climate/data_long.txt", sep=",", header=None)
+df = pd.read_csv("Data/Camp Century Climate/data_long_2022.txt", sep=",", header=None)
 df = df.rename(columns={0: "date"})
 df["date"] = pd.to_datetime(df.date)
 df[df == -999] = np.nan
@@ -1457,19 +1459,30 @@ df = df.set_index("date").resample("D").first()
 df = df.iloc[:, :-2]
 
 df_promice = pd.read_csv(
-    "C:/Users/bav/OneDrive - Geological survey of Denmark and Greenland/Code/PROMICE/PROMICE-AWS-toolbox/out/v03_L3/EGP_hour_v03_L3.txt",
+    "C:/Users/bav/OneDrive - Geological survey of Denmark and Greenland/Code/PROMICE/PROMICE-AWS-toolbox/out/v03_L3/CEN_hour_v03_L3.txt",
     sep="\t",
 )
 df_promice[df_promice == -999] = np.nan
 df_promice = df_promice.rename(columns={"time": "date"})
 df_promice["date"] = pd.to_datetime(df_promice.date)
-df_promice = df_promice.set_index("date").resample("D").mean()
+df_promice = df_promice.set_index("date").resample("D").first()
 df_promice = df_promice["SurfaceHeight_summary(m)"]
+
+df_cen2 = pd.read_csv('Data/Camp Century Climate/CEN2_day.csv')
+df_cen2['time'] = pd.to_datetime(df_cen2.time, utc=True)
+df_cen2 = df_cen2.set_index('time')[['z_boom_l']].resample('D').first()
+df_cen2["SurfaceHeight_summary(m)"] = 2.1130 - df_cen2.z_boom_l + 1.9 
+df_cen2.loc[:'2021-08-24',"SurfaceHeight_summary(m)"] = np.nan
+df_cen2.loc['2022-06-17':,"SurfaceHeight_summary(m)"] =df_cen2.loc['2022-06-17':,"SurfaceHeight_summary(m)"] + 0.85
+
+
+df_promice = df_promice.append(df_cen2["SurfaceHeight_summary(m)"] )
+df_promice = df_promice.resample('D').mean().interpolate()
+
 temp_label = ["T_" + str(i + 1) for i in range(len(df.columns))]
 depth_label = ["depth_" + str(i + 1) for i in range(len(df.columns))]
-df["surface_height"] = df_promice[
-    np.array([x for x in df_promice.index if x in df.index])
-].values
+
+df["surface_height"] = df_promice.loc[df.index[0].strftime('%Y-%m-%d'):df.index[-1].strftime('%Y-%m-%d')].values
 
 depth = [
     0,
@@ -1511,8 +1524,8 @@ df_10 = ftl.interpolate_temperature(
     df[temp_label].values,
     title="Camp Century Climate (long)",
 )
-df_10.loc[np.greater(df_10["temperatureObserved"], -15), "temperatureObserved"] = np.nan
-df_10 = df_10.set_index("date", drop=False).resample("M").first()
+df_10.loc[df_10.temperatureObserved>-15, "temperatureObserved"] = np.nan
+df_10 = df_10.set_index("date", drop=False).resample("M").mean().reset_index()
 df_10["site"] = "CEN"
 df_10["latitude"] = 77.1333
 df_10["longitude"] = -61.0333
@@ -1549,26 +1562,15 @@ df_all = df_all.append(
     ignore_index=True,
 )
 
-df = pd.read_csv("Data/Camp Century Climate/data_short.txt", sep=",", header=None)
+df = pd.read_csv("Data/Camp Century Climate/data_short_2022.txt", sep=",", header=None)
 df = df.rename(columns={0: "date"})
 df["date"] = pd.to_datetime(df.date)
 df[df == -999] = np.nan
-df = df.set_index("date").resample("D").first()
+df = df.set_index("date").resample("D").mean()
 
-df_promice = pd.read_csv(
-    "C:/Users/bav/OneDrive - Geological survey of Denmark and Greenland/Code/PROMICE/PROMICE-AWS-toolbox/out/v03_L3/EGP_hour_v03_L3.txt",
-    sep="\t",
-)
-df_promice[df_promice == -999] = np.nan
-df_promice = df_promice.rename(columns={"time": "date"})
-df_promice["date"] = pd.to_datetime(df_promice.date)
-df_promice = df_promice.set_index("date").resample("D").mean()
-df_promice = df_promice["SurfaceHeight_summary(m)"]
 temp_label = ["T_" + str(i + 1) for i in range(len(df.columns))]
 depth_label = ["depth_" + str(i + 1) for i in range(len(df.columns))]
-df["surface_height"] = df_promice[
-    np.array([x for x in df_promice.index if x in df.index])
-].values
+df["surface_height"] = df_promice.loc[df.index[0].strftime('%Y-%m-%d'):df.index[-1].strftime('%Y-%m-%d')].values
 
 # plt.figure()
 # df_10.temperatureObserved.plot()
@@ -1612,8 +1614,8 @@ df_10 = ftl.interpolate_temperature(
     df[temp_label].values,
     title="Camp Century Climate (short)",
 )
-df_10.loc[np.greater(df_10["temperatureObserved"], -15), "temperatureObserved"] = np.nan
-df_10 = df_10.set_index("date", drop=False).resample("M").first()
+df_10.loc[df_10.temperatureObserved > -15, "temperatureObserved"] = np.nan
+df_10 = df_10.set_index("date", drop=False).resample("M").mean().reset_index()
 df_10["site"] = "CEN"
 df_10["latitude"] = 77.1333
 df_10["longitude"] = -61.0333
@@ -2962,6 +2964,7 @@ df_all = df_all.append(
     ignore_index=True,
 )
 
+
 # %% Thomsen shallow thermistor
 df = pd.read_excel("Data/Thomsen/data-formatted.xlsx")
 # df = df.set_index('d').interpolate(method= 'index')
@@ -3007,6 +3010,7 @@ df_all = df_all.append(
     ],
     ignore_index=True,
 )
+
 # %% Checking values
 df_all = df_all.loc[~df_all.temperatureObserved.isnull(), :]
 

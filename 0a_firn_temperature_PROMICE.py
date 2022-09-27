@@ -32,6 +32,7 @@ PROMICE_stations = PROMICE_stations.loc[
     ),
     :,
 ]
+
 PROMICE_stations = [
     (
         PROMICE_stations.iloc[i, 0],
@@ -48,15 +49,11 @@ for ws in PROMICE_stations:
     print(ws)
     filepath = path_to_PROMICE + "/" + ws[0] + "_hour_v03_L3.txt"
 
-    df = pd.read_csv(filepath, sep="\t", index_col=0, parse_dates=True, na_values=-999)
+    df = pd.read_csv(filepath, sep="\t", index_col=0, parse_dates=True, na_values=-999).reset_index()
     df = df[
         [
-            "Year",
-            "MonthOfYear",
-            "DayOfYear",
-            "HourOfDay(UTC)",
+            'time',
             "AirTemperature(C)",
-            "AirTemperatureHygroClip(C)",
             "SurfaceTemperature(C)",
             "HeightSensorBoom(m)",
             "HeightStakes(m)",
@@ -75,13 +72,12 @@ for ws in PROMICE_stations:
     df["latitude N"] = ws[1][0]
     df["longitude W"] = ws[1][1]
     df["elevation"] = float(ws[2])
+    df = df.loc[df.time<pd.to_datetime('2022-01-01', utc=True),:]
     PROMICE = PROMICE.append(df)
 
 PROMICE.rename(
     columns={
-        "Year": "year",
-        "DayOfYear": "dayofyear",
-        "HourOfDay(UTC)": "hourUTC",
+        "time": "date",
         "IceTemperature1(C)": "rtd0",
         "IceTemperature2(C)": "rtd1",
         "IceTemperature3(C)": "rtd2",
@@ -94,13 +90,7 @@ PROMICE.rename(
     },
     inplace=True,
 )
-PROMICE["date"] = (
-    (np.asarray(PROMICE["year"], dtype="datetime64[Y]") - 1970)
-    + (np.asarray(PROMICE["dayofyear"], dtype="timedelta64[D]") - 1)
-    + np.asarray(PROMICE["hourUTC"], dtype="timedelta64[h]")
-)
 
-PROMICE.drop(["year", "MonthOfYear", "dayofyear", "hourUTC"], axis=1, inplace=True)
 PROMICE.set_index(["sitename", "date"], inplace=True)
 PROMICE.replace(to_replace=-999, value=np.nan, inplace=True)
 sites_all = [item[0] for item in PROMICE_stations]
@@ -130,7 +120,8 @@ maintenance_string[
 maintenance_string["date"] = pd.to_datetime(
     maintenance_string.Year.astype(str)
     + "-"
-    + maintenance_string["Date visit"].astype(str)
+    + maintenance_string["Date visit"].astype(str),
+    utc=True
 )
 
 temp_cols_name = ["rtd0", "rtd1", "rtd2", "rtd3", "rtd4", "rtd5", "rtd6", "rtd7"]
@@ -150,6 +141,7 @@ PROMICE[depth_cols_name] = np.nan
 for site in sites_all:
     print(site)
     # filtering the surface height
+
     tmp = PROMICE.loc[site, "surface_height_summary"].copy()
     ind_filter = tmp.rolling(window=14, center=True).var() > 0.1
     if any(ind_filter):
@@ -197,12 +189,10 @@ for site in sites_all:
                 PROMICE.loc[site, col] = tmp.values
 
     # % Filtering thermistor data
-
     temp_cols_name = ["rtd0", "rtd1", "rtd2", "rtd3", "rtd4", "rtd5", "rtd6", "rtd7"]
     for i in range(8):
         tmp = PROMICE.loc[site, "rtd" + str(i)].copy()
-        plt.figure()
-        PROMICE.loc[site, "rtd" + str(i)].plot()
+
         # variance filter
         ind_filter = (
             PROMICE.loc[site, "rtd" + str(i)]
@@ -239,33 +229,28 @@ for site in sites_all:
         ind_pos = PROMICE.loc[site, "depth_" + str(i)] < 0.1
         if any(ind_pos):
             tmp.loc[ind_pos] = np.nan
-        tmp.plot()
-        # porting the filtered values to the original table
+        # copying the filtered values to the original table
         PROMICE.loc[site, "rtd" + str(i)] = tmp.values
-        # PROMICE.loc[site,'rtd'+str(i)] = PROMICE.loc[site,'rtd'+str(i)].interpolate(limit=14).values
 
-# PROMICE.to_csv('KAN_U_PROMICE_thermistor.csv')
 
-# plt.figure()
-# for i in range(1,9):
-#     df['IceTemperature'+str(i)+'(C)'].plot()
 # %% 10 m firn temp
 df_PROMICE = pd.DataFrame()
 import firn_temp_lib as ftl
-
-# ['EGP', 'CEN', 'KAN_L', 'KAN_M', 'KAN_U', 'KPC_L', 'KPC_U', 'NUK_L', 'NUK_U', 'QAS_L',
-#  'QAS_M', 'QAS_U', 'SCO_L', 'SCO_U', 'TAS_A', 'TAS_L', 'THU_L', 'THU_U', 'UPE_L', 'UPE_U']
-
+PROMICE=PROMICE.sort_index()
 for site in sites_all:
+    if site == 'THU_U':
+        PROMICE.loc[pd.IndexSlice[site, '2020-10-01':'2020-11-30'], 'rtd6'] = np.nan
+        
     df_10 = ftl.interpolate_temperature(
-        PROMICE.loc[site].index,
+        PROMICE.loc[site].index.values,
         PROMICE.loc[site, depth_cols_name].values.astype(float),
         PROMICE.loc[site, temp_cols_name].values.astype(float),
         kind="linear",
         title=site,
         plot=False,
-    )
+        min_diff_to_depth=1.5,
 
+    )
     df_10["latitude"] = PROMICE.loc[site, "latitude N"].values
     df_10["longitude"] = PROMICE.loc[site, "longitude W"].values
     df_10["elevation"] = PROMICE.loc[site, "elevation"].values
@@ -273,12 +258,15 @@ for site in sites_all:
     df_10["depthOfTemperatureObservation"] = 10
     df_10["note"] = ""
     df_10 = df_10.set_index("date")
+    if site == 'CEN':
+        df_10.loc['2021','temperatureObserved'] = np.nan
 
     # filtering
     ind_pos = df_10["temperatureObserved"] > 0.1
     ind_low = df_10["temperatureObserved"] < -70
     df_10.loc[ind_pos, "temperatureObserved"] = np.nan
     df_10.loc[ind_low, "temperatureObserved"] = np.nan
+    
     df_PROMICE = df_PROMICE.append(df_10.reset_index())
 
 df_PROMICE = df_PROMICE.loc[df_PROMICE.temperatureObserved.notnull(), :]
@@ -292,9 +280,9 @@ df_PROMICE_month_mean = (
 df_PROMICE_month_mean.to_csv("Data/PROMICE/PROMICE_10m_firn_temperature.csv", sep=";")
 
 # %% Plotting
+
 for site in sites_all:
     print(site)
-
     fig, ax = plt.subplots(1, 2, figsize=(15, 6))
     plt.subplots_adjust(left=0.05, right=0.95, wspace=0.15, top=0.95)
     PROMICE.loc[site, "surface_height_summary"].plot(
@@ -309,11 +297,6 @@ for site in sites_all:
     )
     maintenance = maintenance_string.loc[maintenance_string.Station == site]
 
-    for i, col in enumerate(depth_cols_name):
-        (-PROMICE.loc[site, col] + PROMICE.loc[site, "surface_height_summary"]).plot(
-            ax=ax[0],
-            label="_nolegend_",
-        )
 
     if len(maintenance.date) > 0:
         for date in maintenance.date:
@@ -331,7 +314,7 @@ for site in sites_all:
                 )
                 # ax[0].plot(
                 #     date,
-                #     depth_top_therm_found,
+                #     depth_top_therm_found.values,
                 #     markersize=10,
                 #     marker="o",
                 #     linestyle="None",
@@ -343,6 +326,12 @@ for site in sites_all:
                     str,
                 ):
                     ax[0].axvline(date)
+    for i, col in enumerate(depth_cols_name):
+        (-PROMICE.loc[site, col] + PROMICE.loc[site, "surface_height_summary"]).plot(
+            ax=ax[0],
+            label="_nolegend_",
+        )
+
     ax[0].set_ylim(
         PROMICE.loc[site, "surface_height_summary"].min() - 11,
         PROMICE.loc[site, "surface_height_summary"].max() + 1,
@@ -425,17 +414,17 @@ for site in sites_all:
         color="lightgray",
         label="filtered",
     )
-    # ax[1].plot(
-    #     np.nan,
-    #     np.nan,
-    #     marker="o",
-    #     linestyle="none",
-    #     color="purple",
-    #     label="maintenance",
-    # )
-    # ax[1].plot(
-    #     np.nan, np.nan, marker="o", linestyle="none", color="pink", label="var filter"
-    # )
+    ax[1].plot(
+        np.nan,
+        np.nan,
+        marker="o",
+        linestyle="none",
+        color="purple",
+        label="maintenance",
+    )
+    ax[1].plot(
+        np.nan, np.nan, marker="o", linestyle="none", color="pink", label="var filter"
+    )
     ax[1].legend()
     ax[0].legend()
     ax[0].set_ylabel("Height (m)")

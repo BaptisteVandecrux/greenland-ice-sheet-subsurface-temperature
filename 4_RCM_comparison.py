@@ -78,14 +78,11 @@ ds_racmo = ds_racmo.rio.write_crs(crs_racmo).drop_vars(["lat", "lon"])
 # ds_racmo['lon'] = (('y', 'x'), lon)
 
 print("loading MAR")
-ds_mar = xr.open_dataset(
-    "C:/Data_save/RCM/MAR/MARv3.12.0.4 fixed/MARv3.12.0.4-ERA5-20km-T10m_2.nc"
-)
-ds_mar = ds_mar.rename({"X10_85": "x", "Y20_155": "y"})
-ds_mar = ds_mar.drop_vars("OUTLAY")
+ds_mar = xr.open_dataset( "Data/RCM/MARv3.12.1_2022_T10m_ME_1980-2021.nc" )
+ds_mar = ds_mar.rename({"X10_85": "x", "Y20_155": "y", 'TIME':'time'}).drop_vars(["LAT", "LON"])
 crs_mar_proj = "+proj=stere +lat_0=90 +lat_ts=70 +lon_0=-45 +x_0=0 +y_0=0 +datum=WGS84 +units=km +no_defs"
 crs_mar = CRS.from_string(crs_mar_proj)
-ds_mar = ds_mar.rio.write_crs(crs_mar).drop_vars(["lat", "lon"])
+ds_mar = ds_mar.rio.write_crs(crs_mar)
 # ds_mar = ds_mar.rio.reproject(target_crs)
 
 print("loading HIRHAM")
@@ -189,7 +186,6 @@ df = extract_T10m_values(
 
 df_save = df.copy()
 
-# %% Plotting RCM performance
 ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
 land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
 DSA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/DSA_MAR_4326.shp")
@@ -198,7 +194,7 @@ HAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/HAPA_MAR_4326.shp")
 firn = gpd.GeoDataFrame.from_file(
     "Data/misc/firn areas/FirnLayer2000-2017_final_4326.shp"
 )
-
+# %% Plotting RCM performance
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
 df_10m = df_10m.reset_index()
 df_10m = df_10m.sort_values("year")
@@ -265,7 +261,7 @@ cb = plt.colorbar(hb, ax=ax_map, cax=cbar_ax, orientation="horizontal")
 cb.ax.get_yaxis().fontsize = 12
 cb.set_label("Number of monthly \n$T_{10m}$ observations", fontsize=12, rotation=0)
 
-model_list = ["ANN", "MAR", "RACMO", "HIRHAM"]
+model_list = ["ANN", "RACMO", "HIRHAM", "MAR"]
 for i, model in enumerate(model_list):
     sym_i = 0
     ax[i].plot(
@@ -470,7 +466,7 @@ CB_color_cycle = [
 ]
 
 fig, ax = plt.subplots(6, 2, figsize=(9, 17))
-fig.subplots_adjust(left=0.08, right=0.99, top=0.93, bottom=0.03, hspace=0.2)
+fig.subplots_adjust(left=0.08, right=0.99, top=0.93, bottom=0.03, hspace=0.25)
 ax = ax.flatten()
 
 for i, site in enumerate(site_list.index):
@@ -510,35 +506,6 @@ for i, site in enumerate(site_list.index):
         label="ANN",
     )
 
-    # plotting MAR
-    df_mar = (
-        ds_mar.T10m.interp(
-            x=site_list.loc[site, "x_mar"],
-            y=site_list.loc[site, "y_mar"],
-            method="linear",
-        )
-        .to_dataframe()
-        .T10m
-    )
-    if df_mar.isnull().all():
-        df_mar = (
-            ds_mar.T10m.interp(
-                x=site_list.loc[site, "x_mar"],
-                y=site_list.loc[site, "y_mar"],
-                method="nearest",
-            )
-            .to_dataframe()
-            .T10m
-        )
-    # df_mar.plot(ax=ax[i], color='k', alpha=0.3, label='_no_legend_')
-    df_mar.resample("Y").mean().plot(
-        ax=ax[i],
-        drawstyle="steps-post",
-        color=CB_color_cycle[1],
-        linewidth=2,
-        label="MAR",
-    )
-
     # plotting RACMO
     df_racmo = (
         ds_racmo.T10m.interp(
@@ -561,7 +528,7 @@ for i, site in enumerate(site_list.index):
     df_racmo.resample("Y").mean().plot(
         ax=ax[i],
         drawstyle="steps-post",
-        color=CB_color_cycle[2],
+        color=CB_color_cycle[1],
         linewidth=2,
         label="RACMO",
     )
@@ -587,11 +554,39 @@ for i, site in enumerate(site_list.index):
     df_hh.resample("Y").mean().plot(
         ax=ax[i],
         drawstyle="steps-post",
-        color=CB_color_cycle[3],
+        color=CB_color_cycle[2],
         linewidth=2,
         label="HIRHAM",
     )
-
+    
+    # plotting MAR
+    df_mar = (
+        ds_mar.T10m.interp(
+            x=site_list.loc[site, "x_mar"],
+            y=site_list.loc[site, "y_mar"],
+            method="linear",
+        )
+        .to_dataframe()
+        .T10m
+    )
+    if df_mar.isnull().all():
+        df_mar = (
+            ds_mar.T10m.interp(
+                x=site_list.loc[site, "x_mar"],
+                y=site_list.loc[site, "y_mar"],
+                method="nearest",
+            )
+            .to_dataframe()
+            .T10m
+        )
+    # df_mar.plot(ax=ax[i], color='k', alpha=0.3, label='_no_legend_')
+    df_mar.resample("Y").mean().plot(
+        ax=ax[i],
+        drawstyle="steps-post",
+        color=CB_color_cycle[3],
+        linewidth=2,
+        label="MAR",
+    )
     # ax[i].set_ylim(np.nanmean(bs_out[0])-4, np.nanmean(bs_out[0])+4)
     ax[i].set_title(ABC[i] + ". " + site, loc="left")
     ax[i].grid()
@@ -603,7 +598,6 @@ for i, site in enumerate(site_list.index):
     else:
         ax[i].set_xlabel("Year")
 ax[0].legend(ncol=5, loc="lower right", bbox_to_anchor=(2, 1.13), fontsize=13)
-fig.text(0.5, 0.01, "Year", ha="center", va="center", fontsize=12)
 fig.text(
     0.02,
     0.5,
@@ -616,7 +610,7 @@ fig.text(
 fig.savefig("figures/model_comp_selected_sites.png")
 
 # %% Preparing input for trend analysis
-
+ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
 ice = ice.to_crs("EPSG:3413")
 ice_4326 = ice.to_crs("EPSG:4326")
 
@@ -769,7 +763,7 @@ from scipy import optimize
 ds_T10m = ds_ann_3413
 T10m_GrIS = ds_ann_GrIS
 model = "ANN"
-
+land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
 land = land.to_crs(ds_T10m.rio.crs)
 
 fig, ax = plt.subplots(2, 3, figsize=(9, 12))
@@ -1014,6 +1008,19 @@ ds_hh_LAPA = selected_area(ds_hh, LAPA) - 273.15
 ds_hh_HAPA = selected_area(ds_hh, HAPA) - 273.15
 ds_hh_BIA = selected_area(ds_hh, firn, mask=1) - 273.15
 
+
+# # %% 
+# plt.close('all')
+# fig, ax = plt.subplots(3,4)
+# ax = ax.flatten()
+# for i in range(1,13):
+#     ds_mar_1990 = ds_mar.sel(time='1990-'+str(i).zfill(2)).T10m.rio.reproject("EPSG:3413")
+#     ds_hh_1990 = (ds_hh.sel(time='1990-'+str(i).zfill(2)).T10m.rio.reproject("EPSG:3413").interp_like(ds_mar_1990)-273.15)
+    
+#     (ds_mar_1990-ds_hh_1990).plot(ax=ax[i-1], cbar_kwargs=dict(label='T10m MAR - T10m HIRHAM'))
+#     ax[i-1].set_title('1990-'+str(i).zfill(2))
+#     ax[i-1].axes.get_xaxis().set_visible(False)
+#     ax[i-1].axes.get_yaxis().set_visible(False)
 #%% Plotting for different firn areas
 CB_color_cycle = [
     "#377eb8",
@@ -1033,9 +1040,9 @@ def plot_selected_ds(tmp, ax, label, mask=0):
         col = CB_color_cycle[0]
     elif label == "RACMO":
         col = CB_color_cycle[1]
-    elif label == "MAR":
-        col = CB_color_cycle[2]
     elif label == "HIRHAM":
+        col = CB_color_cycle[2]
+    elif label == "MAR":
         col = CB_color_cycle[3]
     else:
         col = CB_color_cycle[4]
@@ -1065,36 +1072,36 @@ def plot_selected_ds(tmp, ax, label, mask=0):
     )
 
 
-fig, ax = plt.subplots(4, 1, figsize=(7, 6))
+fig, ax = plt.subplots(4, 1, figsize=(8, 10))
 fig.subplots_adjust(left=0.1, right=0.98, top=0.93, bottom=0.07, hspace=0.25)
 ax = ax.flatten()
 print("bare ice")
 plot_selected_ds(ds_ann_BIA, ax[0], "ANN")
 plot_selected_ds(ds_racmo_BIA, ax[0], "RACMO")
-plot_selected_ds(ds_mar_BIA, ax[0], "MAR")
 plot_selected_ds(ds_hh_BIA, ax[0], "HIRHAM")
+plot_selected_ds(ds_mar_BIA, ax[0], "MAR")
 # plot_selected_ds(ds_era, firn,ax[0], 'ERA5 $T_{2m}$')
 ax[0].set_title("A. Bare ice area", loc="left")
 ax[0].legend(ncol=4, bbox_to_anchor=(1, 1.05), loc="lower right", fontsize=11)
 print("DSA")
 plot_selected_ds(ds_ann_DSA, ax[1], "ANN")
 plot_selected_ds(ds_racmo_DSA, ax[1], "RACMO")
-plot_selected_ds(ds_mar_DSA, ax[1], "MAR")
 plot_selected_ds(ds_hh_DSA, ax[1], "HIRHAM")
+plot_selected_ds(ds_mar_DSA, ax[1], "MAR")
 # plot_selected_ds(ds_era_DSA, ax[1], 'ERA5 $T_{2m}$')
 ax[1].set_title("B. Dry snow area", loc="left")
 print("LAPA")
 plot_selected_ds(ds_ann_LAPA, ax[2], "ANN")
 plot_selected_ds(ds_racmo_LAPA, ax[2], "RACMO")
-plot_selected_ds(ds_mar_LAPA, ax[2], "MAR")
 plot_selected_ds(ds_hh_LAPA, ax[2], "HIRHAM")
+plot_selected_ds(ds_mar_LAPA, ax[2], "MAR")
 # plot_selected_ds(ds_era_LAPA, ax[2], 'ERA5 $T_{2m}$')
 ax[2].set_title("C. Low accumulation percolation area", loc="left")
 print("HAPA")
 plot_selected_ds(ds_ann_HAPA, ax[3], "ANN")
 plot_selected_ds(ds_racmo_HAPA, ax[3], "RACMO")
-plot_selected_ds(ds_mar_HAPA, ax[3], "MAR")
 plot_selected_ds(ds_hh_HAPA, ax[3], "HIRHAM")
+plot_selected_ds(ds_mar_HAPA, ax[3], "MAR")
 # plot_selected_ds(ds_era, HAPA, ax[3], 'ERA5 $T_{2m}$')
 ax[3].set_title("D. High accumulation percolation area", loc="left")
 
@@ -1153,54 +1160,55 @@ _, _, slope_ann, _, pval_ann, _ = linregress_3D(ds_ann_dy.time, ds_ann_dy.T10m)
 
 labels = [
     "A. 1985-2021 trend in 2m \nair temperature",
-    "B. 1985-2021 trend in 10 m \nsubsurface temperature",
-    "C. 1985-2021 trend in snowfall",
+    "B. 1985-2021 trend in snowfall",
+    "C. 1985-2021 trend in 10 m \nsubsurface temperature",
     "D. 1985-2021 trend difference\n bewteen T10m and Ta2m",
 ]
 units = [
     "$^o$C decade$^{-1}$",
-    "$^o$C decade$^{-1}$",
     "mm decade$^{-1}$",
     "$^o$C decade$^{-1}$",
+    "$^o$C decade$^{-1}$",
 ]
+# %%
 fig, ax = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(10, 12))
 ax = ax.flatten()
-vmin = -1
-vmax = 1
+vmin = -1.5
+vmax = 1.5
 (slope_era * 10).plot(
-    ax=ax[0], vmin=vmin, vmax=vmax, cmap="seismic", cbar_kwargs={"label": units[0]}
+    ax=ax[0], vmin=vmin, vmax=vmax, cmap="coolwarm", cbar_kwargs={"label": units[0]}
 )
 X, Y = np.meshgrid(slope_era.x, slope_era.y)
 ax[0].hexbin(
     X.reshape(-1),
     Y.reshape(-1),
-    slope_era.where(pval_era < 0.1).data[:, :].reshape(-1),
+    slope_era.where(pval_era > 0.05).data[:, :].reshape(-1),
     gridsize=(50, 50),
     hatch="..",
     alpha=0,
 )
 
 (slope_ann * 10).plot(
-    ax=ax[1], vmin=vmin, vmax=vmax, cmap="seismic", cbar_kwargs={"label": units[1]}
+    ax=ax[2], vmin=vmin, vmax=vmax, cmap="coolwarm", cbar_kwargs={"label": units[1]}
 )
 X, Y = np.meshgrid(slope_ann.x, slope_ann.y)
-ax[1].hexbin(
+ax[2].hexbin(
     X.reshape(-1),
     Y.reshape(-1),
-    slope_ann.where(pval_ann < 0.1).data[:, :].reshape(-1),
+    slope_ann.where(pval_ann > 0.05).data[:, :].reshape(-1),
     gridsize=(50, 50),
     hatch="..",
     alpha=0,
 )
 
 (slope_sf * 1000 * 10).plot(
-    ax=ax[2], vmin=-10, vmax=10, cmap="seismic", cbar_kwargs={"label": units[2]}
+    ax=ax[1], vmin=-10, vmax=10, cmap="coolwarm", cbar_kwargs={"label": units[2]}
 )
 X, Y = np.meshgrid(slope_sf.x, slope_sf.y)
-ax[2].hexbin(
+ax[1].hexbin(
     X.reshape(-1),
     Y.reshape(-1),
-    slope_sf.where(pval_sf < 0.1).data[:, :].reshape(-1),
+    slope_sf.where(pval_sf > 0.05).data[:, :].reshape(-1),
     gridsize=(50, 50),
     hatch="..",
     alpha=0,
