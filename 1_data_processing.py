@@ -938,8 +938,8 @@ for site in sites:
     df_firncover = df_firncover.append(df_10)
 df_firncover[
     "reference"
-] = "MacFerrin, M., Stevens, C.M., Vandecrux, B., Waddington, E., Abdalati, W.: The Greenland Firn Compaction Verification and Reconnaissance (FirnCover) Dataset, 2013-2019, submitted to ESSD"
-df_firncover["reference_short"] = "FirnCover"
+] = "MacFerrin, M. J., Stevens, C. M., Vandecrux, B., Waddington, E. D., and Abdalati, W. (2022) The Greenland Firn Compaction Verification and Reconnaissance (FirnCover) dataset, 2013–2019, Earth Syst. Sci. Data, 14, 955–971, https://doi.org/10.5194/essd-14-955-2022,"
+df_firncover["reference_short"] = "MacFerrin et al. (2022)"
 df_firncover["note"] = ""
 df_firncover["depthOfTemperatureObservation"] = 10
 
@@ -963,6 +963,7 @@ df_all = df_all.append(
             "depthOfTemperatureObservation",
             "temperatureObserved",
             "reference",
+            "reference_short",
             "note",
             "error",
             "durationOpen",
@@ -1451,7 +1452,7 @@ df_all = df_all.append(
 
 # %% Camp Century Climate
 print("Loading Camp Century data")
-df = pd.read_csv("Data/Camp Century Climate/data_long_2022.txt", sep=",", header=None)
+df = pd.read_csv("Data/Camp Century Climate/data_long.txt", sep=",", header=None)
 df = df.rename(columns={0: "date"})
 df["date"] = pd.to_datetime(df.date)
 df[df == -999] = np.nan
@@ -1562,7 +1563,7 @@ df_all = df_all.append(
     ignore_index=True,
 )
 
-df = pd.read_csv("Data/Camp Century Climate/data_short_2022.txt", sep=",", header=None)
+df = pd.read_csv("Data/Camp Century Climate/data_short.txt", sep=",", header=None)
 df = df.rename(columns={0: "date"})
 df["date"] = pd.to_datetime(df.date)
 df[df == -999] = np.nan
@@ -1939,7 +1940,7 @@ df3 = pd.read_csv("Data/Wegener 1930/ReadMe.txt", sep=";")
 
 df1["depth"] = df1.depth / 100
 df1 = df1.append({"Firntemp": np.nan, "depth": 10}, ignore_index=True)
-df1 = interp_pandas(df1.set_index("depth"))
+df1 = interp_pandas(df1.set_index("depth"), kind="linear")
 
 df_wegener = pd.DataFrame.from_dict(
     {
@@ -2263,7 +2264,7 @@ df_s_o = pd.read_excel("Data/Stauffer and Oeschger 1979/Stauffer&Oeschger1979.xl
 
 df_s_o[
     "reference"
-] = "Stauffer, B, Oeschger, H 1979 Temperaturprofile in Bohrlöchern am Rande des grönländischen Inlandeises. Mitteilungen der Versuchsanstalt für Wasserbau, Hydrologie und Glaziologie an der Eidgenössischen Technischen Hochschule (Zürich) 41: 301—313 and Clausen HB and Stauffer B (1988) Analyses of Two Ice Cores Drilled at the Ice-Sheet Margin in West Greenland. Annals of Glaciology 10, 23–27 (doi:10.3189/S0260305500004109)"
+] = "Clausen HB and Stauffer B (1988) Analyses of Two Ice Cores Drilled at the Ice-Sheet Margin in West Greenland. Annals of Glaciology 10, 23–27 (doi:10.3189/S0260305500004109)"
 df_s_o["reference_short"] = "Stauffer and Oeschger (1979)"
 df_s_o["note"] = "site location estimated by M. Luethi"
 df_s_o["method"] = "Fenwal Thermistor UUB 31-J1"
@@ -2678,7 +2679,7 @@ df_interp["depthOfTemperatureObservation"] = 10
 df_interp["date"] = pd.to_datetime(df_interp.date)
 df_interp[
     "reference"
-] = "Schytt, V. (1955) Glaciological investigations in the Thule Ramp area, U. S. Army Snow Ice and Permafrost Research Establishment, Corps of Engineers, Report 28, 88 pp."
+] = "Schytt, V. (1955) Glaciological investigations in the Thule Ramp area, U. S. Army Snow Ice and Permafrost Research Establishment, Corps of Engineers, Report 28, 88 pp. https://hdl.handle.net/11681/5989"
 df_interp["reference_short"] = "Schytt (1955)"
 df_interp["note"] = "from table"
 
@@ -2743,7 +2744,7 @@ df_interp["depthOfTemperatureObservation"] = 10
 df_interp["date"] = pd.to_datetime(df_interp.date)
 df_interp[
     "reference"
-] = "Griffiths, T. M. (1960). Glaciological investigations in the TUTO area of Greenland., U. S. Army Snow Ice and Permafrost Research Establishment, Corps of Engineers, Report 47, 62 pp."
+] = "Griffiths, T. M. (1960). Glaciological investigations in the TUTO area of Greenland., U. S. Army Snow Ice and Permafrost Research Establishment, Corps of Engineers, Report 47, 62 pp. https://hdl.handle.net/11681/5981"
 df_interp["reference_short"] = "Griffiths (1960)"
 df_interp["note"] = "from table"
 df_interp["method"] = "copper-constantan thermocouples"
@@ -2805,10 +2806,11 @@ for site in df.site.unique():
 
 df_interp["depthOfTemperatureObservation"] = 10
 df_interp["date"] = pd.to_datetime(df_interp.date)
-df_interp[
-    "reference"
-] = "Griffiths, T. M. (1960). Glaciological investigations in the TUTO area of Greenland., U. S. Army Snow Ice and Permafrost Research Establishment, Corps of Engineers, Report 47, 62 pp. and Meier, M. F., Conel, J. E., Hoerni, J. A., Melbourne, W. G., & Pings, C. J. (1957). Preliminary Study of Crevasse Formation. Blue Ice Valley, Greenland, 1955. OCCIDENTAL COLL LOS ANGELES CALIF."
+df_interp["reference"] = "Griffiths, T. M. (1960). Glaciological investigations in the TUTO area of Greenland., U. S. Army Snow Ice and Permafrost Research Establishment, Corps of Engineers, Report 47, 62 pp. https://hdl.handle.net/11681/5981"
 df_interp["reference_short"] = "Griffiths (1960)"
+
+df_interp.loc[df_interp.date <= '1955-12-31','reference'] = "Meier, M. F., Conel, J. E., Hoerni, J. A., Melbourne, W. G., & Pings, C. J. (1957). Preliminary Study of Crevasse Formation. Blue Ice Valley, Greenland, 1955. OCCIDENTAL COLL LOS ANGELES CALIF. https://hdl.handle.net/11681/6029"
+df_interp.loc[df_interp.date <= '1955-12-31',"reference_short"] = "Meier et al. (1957)"
 
 df_interp["latitude"] = 76.43164
 df_interp["longitude"] = -67.54949
@@ -3139,3 +3141,12 @@ for ref in df.reference_short.unique():
             )
 
 df_m.to_csv("output/10m_temperature_dataset_monthly.csv", index=False)
+
+#%% 
+df_m['coeff'] = 1
+df_summary = (df_m.groupby('reference_short')
+              .apply(lambda x: x.coeff.sum())
+              .reset_index(name='num_measurements'))
+explode = 0.5*(df_summary.num_measurements.max() - df_summary.num_measurements)/df_summary.num_measurements.max()
+df_summary.set_index('reference_short').plot.pie(y='num_measurements',explode=explode, figsize=(5, 5))
+plt.legend('off')

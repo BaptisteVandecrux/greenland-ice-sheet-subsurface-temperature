@@ -232,6 +232,40 @@ for site in sites_all:
         # copying the filtered values to the original table
         PROMICE.loc[site, "rtd" + str(i)] = tmp.values
 
+# %% output netcdf
+# tmp = PROMICE[['latitude N', 'longitude W',
+#        'elevation', 'surface_height_summary', 'AirTemperature(C)', 'SurfaceTemperature(C)', 'rtd0', 'rtd1', 'rtd2',
+#        'rtd3', 'rtd4', 'rtd5', 'rtd6', 'rtd7', 'depth_0', 'depth_1', 'depth_2',
+#        'depth_3', 'depth_4', 'depth_5', 'depth_6', 'depth_7']]
+# tmp = tmp.reset_index()
+# tmp = tmp.rename({'sitename':'site', 'rtd0':'ice_temp_0', 'rtd1':'ice_temp_1', 'rtd2':'ice_temp_2',
+#             'rtd3':'ice_temp_3', 'rtd4':'ice_temp_4', 'rtd5':'ice_temp_5', 
+#             'rtd6':'ice_temp_6', 'rtd7':'ice_temp_7'}, axis = 'columns')
+# inds = pd.isnull(tmp[['ice_temp_'+str(i) for i in range(8)]]).all(1)
+# tmp = tmp.loc[~inds,:]
+# inds = pd.isnull(tmp[['depth_'+str(i) for i in range(8)]]).all(1)
+# tmp = tmp.loc[~inds,:]
+
+# tmp['date'] = tmp.date.dt.tz_localize(None)
+# tmp = tmp.set_index(['site','date'])
+
+# ds = tmp.iloc[:,3:].to_xarray()
+# coords = tmp[['latitude N', 'longitude W','elevation']].drop_duplicates().reset_index('date').drop(columns='date')
+# ds['latitude'] = (('site'), coords['latitude N'], {'units':'deg N'})
+# ds['longitude'] = (('site'), coords['longitude W'], {'units':'deg N'})
+# ds['elevation'] = (('site'), coords['elevation'], {'units':'m a.s.l.'})
+
+# for i in range(8):
+#     ds['ice_temp_'+str(i)].attrs = {'units':'deg C'}
+#     ds['depth_'+str(i)].attrs = {'units':'m'}
+# for var in ['surface_height_summary', 'AirTemperature(C)', 'SurfaceTemperature(C)']:
+#     ds[var].attrs = {'units':'deg C'}
+
+# ds['surface_height_summary'].attrs = {'units':'m'}
+# ds.attrs = {'title':'Currated PROMICE subsurface temperatures with depth of measurements',
+#             'author':'B. Vandecrux', 'email':'bav@geus.dk', 'production_date':'2022-10-14'}
+
+# ds.to_netcdf("Data/PROMICE/PROMICE_subsurface_temperature_all_depths_hourly.nc")
 
 # %% 10 m firn temp
 df_PROMICE = pd.DataFrame()

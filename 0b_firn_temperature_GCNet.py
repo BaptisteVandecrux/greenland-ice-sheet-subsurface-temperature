@@ -432,8 +432,9 @@ for site in meta.site_short:  #
             )
         elif site == "SDL":
             df = pd.read_csv(filename, skiprows=5, low_memory=False)
-            cols.append("?")
-            df.columns = cols
+            cols.insert(36,'?')
+            cols.insert(36,'?')
+            df.columns = cols[:-1]
             df.time = pd.to_datetime(df.time) - pd.Timedelta(
                 days=365 * 102 - 88, minutes=8, seconds=16
             )
@@ -541,5 +542,5 @@ for site in meta.site_short:  #
             ]
         ]
     )
-
+# %%
 df_gcn2.to_csv("Data/GCNv2/10m_firn_temperature.csv")

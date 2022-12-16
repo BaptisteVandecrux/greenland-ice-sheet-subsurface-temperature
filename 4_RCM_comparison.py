@@ -62,7 +62,7 @@ target_crs = CRS.from_string("EPSG:3413")
 
 print("loading RACMO")
 ds_racmo = (
-    xr.open_dataset("C:/Data_save/RCM/RACMO/FDM_T10m_FGRN055_1957-2020_GrIS_GIC.nc")
+    xr.open_dataset("Data/RCM/FDM_T10m_FGRN055_1957-2020_GrIS_GIC.nc")
     .set_coords("lat")
     .set_coords("lon")
 )
@@ -88,7 +88,7 @@ ds_mar = ds_mar.rio.write_crs(crs_mar)
 print("loading HIRHAM")
 # HIRHAM has no projection, just a lat-lon grid
 ds_hh = xr.open_dataset(
-    "C:/Data_save/RCM/RetMIP/RetMIP_2D_T10m/RetMIP_2Doutput_Daily_DMIHH_T10m.nc"
+    "Data/RCM/RetMIP_2Doutput_Daily_DMIHH_T10m.nc"
 )
 ds_hh["time"] = pd.to_datetime(
     [int(s) for s in np.floor(ds_hh["time"].values)], format="%Y%m%d"
