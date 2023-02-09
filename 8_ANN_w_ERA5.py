@@ -16,9 +16,8 @@ from scipy.spatial.distance import cdist
 import rasterio as rio
 
 # import GIS_lib as gis
-import progressbar
+from progressbar import progressbar
 import matplotlib
-import wandb
 
 df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
 
@@ -79,7 +78,7 @@ x = xr.DataArray(coords_uni[:, 0], dims="points")
 y = xr.DataArray(coords_uni[:, 1], dims="points")
 ds_interp = ds_era.interp(latitude=x, longitude=y, method="linear")
 
-for i in progressbar.progressbar(range(df.shape[0])):
+for i in (range(df.shape[0])):
     query_point = (df.iloc[i, :].latitude, df.iloc[i, :].longitude)
     index_point = np.where((coords_uni == query_point).all(axis=1))[0][0]
     tmp = ds_interp.isel(points=index_point)
@@ -440,7 +439,7 @@ model = KerasClassifier(build_fn=create_model, verbose=0, n_layers=[1, 2], num_n
 # param_grid = dict(batch_size=batch_size, epochs=epochs)
 # grid = GridSearchCV(estimator=model, param_grid=param_grid, n_jobs=-1, cv=3)
 param_grid = dict(batch_size = [100, 1000], epochs = [20,60,500])
-grid = GridSearchCV(estimator = model  #, param_grid = param_grid)
+grid = GridSearchCV(estimator = model , param_grid = param_grid)
 grid_result = grid.fit(X, y)
 
 # summarize results

@@ -14,12 +14,8 @@ import progressbar
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from datetime import datetime as dt
-from scipy.spatial import ConvexHull, convex_hull_plot_2d
-from scipy.interpolate import Rbf
 import itertools
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-import cartopy.crs as ccrs
-import matplotlib.ticker as mticker
+# import cartopy.crs as ccrs
 from scipy.spatial import cKDTree
 
 
@@ -46,8 +42,7 @@ def interpolate_temperature(
     tmp = tmp.resample("H").mean()
     # tmp = tmp.interpolate(limit=24*7)
     temp = tmp.loc[dates].values
-
-    for i in progressbar.progressbar(range(len(dates))):
+    for i in (range(len(dates))):
         x = depth_cor[i, :].astype(float)
         y = temp[i, :].astype(float)
         ind_no_nan = ~np.isnan(x + y)

@@ -11,457 +11,112 @@ tip list:
 
 import numpy as np
 import matplotlib.pyplot as plt
-import datetime
 import pandas as pd
-import matplotlib.dates as mdates
 
-years = mdates.YearLocator()  # every year
-months = mdates.MonthLocator()  # every month
-years_fmt = mdates.DateFormatter("%Y")
 np.seterr(invalid="ignore")
 
 
-#%% Adding PROMICE observations
-# Array information of stations available at PROMICE official site: https://promice.org/WeatherStations.html
-PROMICE_stations = pd.read_csv("Data/PROMICE/PROMICE_coordinates_2015.csv", sep=";")
+df_info = pd.read_csv('Data/PROMICE/AWS_station_locations.csv')
+df_info = df_info.loc[df_info.location_type == 'ice sheet',:]
+path_to_PROMICE = 'C:/Users/bav/OneDrive - Geological survey of Denmark and Greenland/Code/PROMICE/PROMICE-AWS-toolbox/out/L4/'
 
-# removing stations that are outside of the ice sheet
-PROMICE_stations = PROMICE_stations.loc[
-    ~np.isin(
-        PROMICE_stations["Station name"], ["MIT", "NUK_K", "KAN_B", "NUK_N", "TAS_U"]
-    ),
-    :,
-]
-
-PROMICE_stations = [
-    (
-        PROMICE_stations.iloc[i, 0],
-        (PROMICE_stations.iloc[i, 1], PROMICE_stations.iloc[i, 2]),
-        PROMICE_stations.iloc[i, 3],
-    )
-    for i in range(PROMICE_stations.shape[0])
-]
-
-path_to_PROMICE = "C:/Users/bav/OneDrive - Geological survey of Denmark and Greenland/Code/PROMICE/PROMICE-AWS-toolbox/out/v03_L3"
-PROMICE = pd.DataFrame()
-
-for ws in PROMICE_stations:
-    print(ws)
-    filepath = path_to_PROMICE + "/" + ws[0] + "_hour_v03_L3.txt"
-
-    df = pd.read_csv(filepath, sep="\t", index_col=0, parse_dates=True, na_values=-999).reset_index()
-    df = df[
-        [
-            'time',
-            "AirTemperature(C)",
-            "SurfaceTemperature(C)",
-            "HeightSensorBoom(m)",
-            "HeightStakes(m)",
-            "SurfaceHeight_summary(m)",
-            "IceTemperature1(C)",
-            "IceTemperature2(C)",
-            "IceTemperature3(C)",
-            "IceTemperature4(C)",
-            "IceTemperature5(C)",
-            "IceTemperature6(C)",
-            "IceTemperature7(C)",
-            "IceTemperature8(C)",
-        ]
-    ]
-    df["station_name"] = ws[0]
-    df["latitude N"] = ws[1][0]
-    df["longitude W"] = ws[1][1]
-    df["elevation"] = float(ws[2])
-    df = df.loc[df.time<pd.to_datetime('2022-01-01', utc=True),:]
-    PROMICE = PROMICE.append(df)
-
-PROMICE.rename(
-    columns={
-        "time": "date",
-        "IceTemperature1(C)": "rtd0",
-        "IceTemperature2(C)": "rtd1",
-        "IceTemperature3(C)": "rtd2",
-        "IceTemperature4(C)": "rtd3",
-        "IceTemperature5(C)": "rtd4",
-        "IceTemperature6(C)": "rtd5",
-        "IceTemperature7(C)": "rtd6",
-        "IceTemperature8(C)": "rtd7",
-        "station_name": "sitename",
-    },
-    inplace=True,
-)
-
-PROMICE.set_index(["sitename", "date"], inplace=True)
-PROMICE.replace(to_replace=-999, value=np.nan, inplace=True)
-sites_all = [item[0] for item in PROMICE_stations]
-PROMICE = PROMICE.loc[sites_all, :]
-PROMICE["surface_height_summary"] = PROMICE["SurfaceHeight_summary(m)"]
-PROMICE_save = PROMICE.copy()
-
-# %% Correcting depth with surface height change and maintenance and filtering
-
-PROMICE = PROMICE_save.copy()
-
-try:
-    url = "https://docs.google.com/spreadsheets/d/19WT3BOspQAI3p-r5LPUxIr3AY8jWlEuaf3M_jIT1Z8E/export?format=csv&gid=0"
-    pd.read_csv(url).to_csv("Data/PROMICE/fieldwork_summary_PROMICE.csv")
-except:
-    pass
-
-maintenance_string = pd.read_csv("Data/PROMICE/fieldwork_summary_PROMICE.csv")
-maintenance_string = maintenance_string.replace("OUT", np.nan)
-maintenance_string[
-    "Length of thermistor string on surface from surface marking"
-] = maintenance_string[
-    "Length of thermistor string on surface from surface marking"
-].astype(
-    float
-)
-maintenance_string["date"] = pd.to_datetime(
-    maintenance_string.Year.astype(str)
-    + "-"
-    + maintenance_string["Date visit"].astype(str),
-    utc=True
-)
-
-temp_cols_name = ["rtd0", "rtd1", "rtd2", "rtd3", "rtd4", "rtd5", "rtd6", "rtd7"]
-depth_cols_name = [
-    "depth_0",
-    "depth_1",
-    "depth_2",
-    "depth_3",
-    "depth_4",
-    "depth_5",
-    "depth_6",
-    "depth_7",
-]
-ini_depth = [1, 2, 3, 4, 5, 6, 7, 10]
-PROMICE[depth_cols_name] = np.nan
-
-for site in sites_all:
-    print(site)
-    # filtering the surface height
-
-    tmp = PROMICE.loc[site, "surface_height_summary"].copy()
-    ind_filter = tmp.rolling(window=14, center=True).var() > 0.1
-    if any(ind_filter):
-        tmp[ind_filter] = np.nan
-    PROMICE.loc[site, "surface_height_summary"] = tmp.values
-    PROMICE.loc[site, "surface_height_summary"] = (
-        PROMICE.loc[site, "surface_height_summary"].interpolate().values
-    )
-
-    maintenance = maintenance_string.loc[maintenance_string.Station == site]
-
-    # first initialization of the depths
-    for i, col in enumerate(depth_cols_name):
-        PROMICE.loc[site, col] = (
-            ini_depth[i]
-            + PROMICE.loc[site, "surface_height_summary"].values
-            - PROMICE.loc[site, "surface_height_summary"][
-                PROMICE.loc[site, "surface_height_summary"].first_valid_index()
-            ]
-        )
-
-    # reseting depth at maintenance
-    if len(maintenance.date) == 0:
-        print("No maintenance at ", site)
-
-    for date in maintenance.date:
-        if date > PROMICE.loc[site, "surface_height_summary"].last_valid_index():
-            continue
-        new_depth = maintenance.loc[
-            maintenance.date == date
-        ].depth_new_thermistor_m.values[0]
-        if isinstance(new_depth, str):
-            new_depth = [float(x) for x in new_depth.split(",")]
-            for i, col in enumerate(depth_cols_name):
-                tmp = PROMICE.loc[site, col].copy()
-                tmp.loc[date:] = (
-                    new_depth[i]
-                    + PROMICE.loc[site, "surface_height_summary"][date:].values
-                    - PROMICE.loc[site, "surface_height_summary"][date:][
-                        PROMICE.loc[site, "surface_height_summary"][
-                            date:
-                        ].first_valid_index()
-                    ]
-                )
-                PROMICE.loc[site, col] = tmp.values
-
-    # % Filtering thermistor data
-    temp_cols_name = ["rtd0", "rtd1", "rtd2", "rtd3", "rtd4", "rtd5", "rtd6", "rtd7"]
-    for i in range(8):
-        tmp = PROMICE.loc[site, "rtd" + str(i)].copy()
-
-        # variance filter
-        ind_filter = (
-            PROMICE.loc[site, "rtd" + str(i)]
-            .interpolate(limit=14)
-            .rolling(window=7)
-            .var()
-            > 0.5
-        )
-        month = (
-            PROMICE.loc[site, "rtd" + str(i)].interpolate(limit=14).index.month.values
-        )
-        ind_filter.loc[np.isin(month, [5, 6, 7])] = False
-        if any(ind_filter):
-            tmp.loc[ind_filter] = np.nan
-
-        # before and after maintenance adaptation filter
-        maintenance = maintenance_string.loc[maintenance_string.Station == site]
-        if len(maintenance.date) > 0:
-            for date in maintenance.date:
-                if isinstance(
-                    maintenance.loc[
-                        maintenance.date == date
-                    ].depth_new_thermistor_m.values[0],
-                    str,
-                ):
-                    ind_adapt = np.abs(
-                        tmp.interpolate(limit=14).index.values
-                        - pd.to_datetime(date).to_datetime64()
-                    ) < np.timedelta64(7, "D")
-                    if any(ind_adapt):
-                        tmp.loc[ind_adapt] = np.nan
-
-        # surfaced thermistor
-        ind_pos = PROMICE.loc[site, "depth_" + str(i)] < 0.1
-        if any(ind_pos):
-            tmp.loc[ind_pos] = np.nan
-        # copying the filtered values to the original table
-        PROMICE.loc[site, "rtd" + str(i)] = tmp.values
-
-# %% output netcdf
-# tmp = PROMICE[['latitude N', 'longitude W',
-#        'elevation', 'surface_height_summary', 'AirTemperature(C)', 'SurfaceTemperature(C)', 'rtd0', 'rtd1', 'rtd2',
-#        'rtd3', 'rtd4', 'rtd5', 'rtd6', 'rtd7', 'depth_0', 'depth_1', 'depth_2',
-#        'depth_3', 'depth_4', 'depth_5', 'depth_6', 'depth_7']]
-# tmp = tmp.reset_index()
-# tmp = tmp.rename({'sitename':'site', 'rtd0':'ice_temp_0', 'rtd1':'ice_temp_1', 'rtd2':'ice_temp_2',
-#             'rtd3':'ice_temp_3', 'rtd4':'ice_temp_4', 'rtd5':'ice_temp_5', 
-#             'rtd6':'ice_temp_6', 'rtd7':'ice_temp_7'}, axis = 'columns')
-# inds = pd.isnull(tmp[['ice_temp_'+str(i) for i in range(8)]]).all(1)
-# tmp = tmp.loc[~inds,:]
-# inds = pd.isnull(tmp[['depth_'+str(i) for i in range(8)]]).all(1)
-# tmp = tmp.loc[~inds,:]
-
-# tmp['date'] = tmp.date.dt.tz_localize(None)
-# tmp = tmp.set_index(['site','date'])
-
-# ds = tmp.iloc[:,3:].to_xarray()
-# coords = tmp[['latitude N', 'longitude W','elevation']].drop_duplicates().reset_index('date').drop(columns='date')
-# ds['latitude'] = (('site'), coords['latitude N'], {'units':'deg N'})
-# ds['longitude'] = (('site'), coords['longitude W'], {'units':'deg N'})
-# ds['elevation'] = (('site'), coords['elevation'], {'units':'m a.s.l.'})
-
-# for i in range(8):
-#     ds['ice_temp_'+str(i)].attrs = {'units':'deg C'}
-#     ds['depth_'+str(i)].attrs = {'units':'m'}
-# for var in ['surface_height_summary', 'AirTemperature(C)', 'SurfaceTemperature(C)']:
-#     ds[var].attrs = {'units':'deg C'}
-
-# ds['surface_height_summary'].attrs = {'units':'m'}
-# ds.attrs = {'title':'Currated PROMICE subsurface temperatures with depth of measurements',
-#             'author':'B. Vandecrux', 'email':'bav@geus.dk', 'production_date':'2022-10-14'}
-
-# ds.to_netcdf("Data/PROMICE/PROMICE_subsurface_temperature_all_depths_hourly.nc")
-
-# %% 10 m firn temp
-df_PROMICE = pd.DataFrame()
-import firn_temp_lib as ftl
-PROMICE=PROMICE.sort_index()
-for site in sites_all:
-    if site == 'THU_U':
-        PROMICE.loc[pd.IndexSlice[site, '2020-10-01':'2020-11-30'], 'rtd6'] = np.nan
-        
-    df_10 = ftl.interpolate_temperature(
-        PROMICE.loc[site].index.values,
-        PROMICE.loc[site, depth_cols_name].values.astype(float),
-        PROMICE.loc[site, temp_cols_name].values.astype(float),
-        kind="linear",
-        title=site,
-        plot=False,
-        min_diff_to_depth=1.5,
-
-    )
-    df_10["latitude"] = PROMICE.loc[site, "latitude N"].values
-    df_10["longitude"] = PROMICE.loc[site, "longitude W"].values
-    df_10["elevation"] = PROMICE.loc[site, "elevation"].values
-    df_10["site"] = site
-    df_10["depthOfTemperatureObservation"] = 10
-    df_10["note"] = ""
-    df_10 = df_10.set_index("date")
-    if site == 'CEN':
-        df_10.loc['2021','temperatureObserved'] = np.nan
-
-    # filtering
-    ind_pos = df_10["temperatureObserved"] > 0.1
-    ind_low = df_10["temperatureObserved"] < -70
-    df_10.loc[ind_pos, "temperatureObserved"] = np.nan
-    df_10.loc[ind_low, "temperatureObserved"] = np.nan
+for site in df_info['stid']:
+    # break
+    #     # %%
+    plt.close('all')
+    # site = 'TAS_A'
     
-    df_PROMICE = df_PROMICE.append(df_10.reset_index())
+    df_aws = pd.read_csv(path_to_PROMICE+site+'_L4.csv')
+    df_aws['time'] = pd.to_datetime(df_aws.time, utc=True)
+    df_aws = df_aws.set_index('time')
+    
+    depth_cols_name = [v for v in df_aws.columns if "depth" in v]
+    temp_cols_name = [v for v in df_aws.columns if "t_i_" in v and "depth" not in v and "10m" not in v]
 
-df_PROMICE = df_PROMICE.loc[df_PROMICE.temperatureObserved.notnull(), :]
-
-df_PROMICE = df_PROMICE.set_index("date")
-
-df_PROMICE_month_mean = (
-    df_PROMICE.groupby("site").resample("M").mean().reset_index("site")
-)
-
-df_PROMICE_month_mean.to_csv("Data/PROMICE/PROMICE_10m_firn_temperature.csv", sep=";")
-
-# %% Plotting
-
-for site in sites_all:
     print(site)
+    if df_aws[temp_cols_name].isnull().all().all():
+        print('No thermistor data')
+        continue
     fig, ax = plt.subplots(1, 2, figsize=(15, 6))
     plt.subplots_adjust(left=0.05, right=0.95, wspace=0.15, top=0.95)
-    PROMICE.loc[site, "surface_height_summary"].plot(
+    df_aws["z_surf_combined"].plot(
         ax=ax[0], color="black", label="surface", linewidth=3
     )
-    (PROMICE.loc[site, "surface_height_summary"] - 10).plot(
+    (df_aws["z_surf_combined"] - 10).plot(
         ax=ax[0],
         color="red",
         linestyle="-",
         linewidth=4,
         label="10 m depth",
     )
-    maintenance = maintenance_string.loc[maintenance_string.Station == site]
 
 
-    if len(maintenance.date) > 0:
-        for date in maintenance.date:
-            index = PROMICE.loc[site, "surface_height_summary"].index
-            date2 = index[index.get_loc(date, method="nearest")]
-            if np.abs(date - date2) <= pd.Timedelta("7 days"):
-                depth_top_therm_found = (
-                    maintenance.loc[
-                        maintenance.date == date,
-                        "Length of thermistor string on surface from surface marking",
-                    ]
-                    / 100
-                    - 1
-                    + PROMICE.loc[site, "surface_height_summary"][date2]
-                )
-                # ax[0].plot(
-                #     date,
-                #     depth_top_therm_found.values,
-                #     markersize=10,
-                #     marker="o",
-                #     linestyle="None",
-                # )
-                if isinstance(
-                    maintenance.loc[
-                        maintenance.date == date
-                    ].depth_new_thermistor_m.values[0],
-                    str,
-                ):
-                    ax[0].axvline(date)
     for i, col in enumerate(depth_cols_name):
-        (-PROMICE.loc[site, col] + PROMICE.loc[site, "surface_height_summary"]).plot(
+        (-df_aws[col] + df_aws["z_surf_combined"]).plot(
             ax=ax[0],
             label="_nolegend_",
         )
 
     ax[0].set_ylim(
-        PROMICE.loc[site, "surface_height_summary"].min() - 11,
-        PROMICE.loc[site, "surface_height_summary"].max() + 1,
+        df_aws["z_surf_combined"].min() - 11,
+        df_aws["z_surf_combined"].max() + 1,
     )
 
-    temp_cols_name = ["rtd0", "rtd1", "rtd2", "rtd3", "rtd4", "rtd5", "rtd6", "rtd7"]
-    for i in range(8):
-        PROMICE_save.loc[site, "rtd" + str(i)].interpolate(limit=14).plot(
+    for i in range(len(temp_cols_name)):
+        df_aws[temp_cols_name[i]].interpolate(limit=14).plot(
             ax=ax[1], label="_nolegend_"
         )
 
-        tmp = PROMICE_save.loc[site, "rtd" + str(i)].copy()
-        # variance filter
-        ind_filter = (
-            PROMICE_save.loc[site, "rtd" + str(i)]
-            .interpolate(limit=14)
-            .rolling(window=7)
-            .var()
-            > 0.5
-        )
-        month = (
-            PROMICE_save.loc[site, "rtd" + str(i)]
-            .interpolate(limit=14)
-            .index.month.values
-        )
-        ind_filter.loc[np.isin(month, [5, 6, 7])] = False
-        if any(ind_filter):
-            tmp.loc[ind_filter].plot(
-                ax=ax[1],
-                marker="o",
-                linestyle="none",
-                color="lightgray",
-                label="_nolegend_",
-            )
-
-        # before and after maintenance adaptation filter
-        maintenance = maintenance_string.loc[maintenance_string.Station == site]
-        if len(maintenance.date) > 0:
-            for date in maintenance.date:
-                if isinstance(
-                    maintenance.loc[
-                        maintenance.date == date
-                    ].depth_new_thermistor_m.values[0],
-                    str,
-                ):
-                    ind_adapt = np.abs(
-                        tmp.interpolate(limit=14).index.values
-                        - pd.to_datetime(date).to_datetime64()
-                    ) < np.timedelta64(7, "D")
-                    if any(ind_adapt):
-                        tmp.loc[ind_adapt].plot(
-                            ax=ax[1],
-                            marker="o",
-                            linestyle="none",
-                            color="lightgray",
-                            label="_nolegend_",
-                        )
-
-        # surfaced thermistor
-        ind_pos = PROMICE.loc[site, "depth_" + str(i)] < 0.1
-        if any(ind_pos):
-            tmp.loc[ind_pos].plot(
-                ax=ax[1],
-                marker="o",
-                linestyle="none",
-                color="lightgray",
-                label="_nolegend_",
-            )
-    if len(df_PROMICE.loc[df_PROMICE.site == site, "temperatureObserved"]) == 0:
+    if len(df_aws["t_i_10m"]) == 0:
         print("No 10m temp for ", site)
     else:
-        df_PROMICE.loc[df_PROMICE.site == site, "temperatureObserved"].resample(
+        df_aws["t_i_10m"].resample(
             "W"
         ).mean().plot(ax=ax[1], color="red", linewidth=5, label="10 m temperature")
-    ax[1].plot(
-        np.nan,
-        np.nan,
-        marker="o",
-        linestyle="none",
-        color="lightgray",
-        label="filtered",
-    )
-    ax[1].plot(
-        np.nan,
-        np.nan,
-        marker="o",
-        linestyle="none",
-        color="purple",
-        label="maintenance",
-    )
-    ax[1].plot(
-        np.nan, np.nan, marker="o", linestyle="none", color="pink", label="var filter"
-    )
+
     ax[1].legend()
     ax[0].legend()
     ax[0].set_ylabel("Height (m)")
     ax[1].set_ylabel("Subsurface temperature ($^o$C)")
     fig.suptitle(site)
-    fig.savefig("figures/PROMICE/PROMICE_" + site + ".png", dpi=90)
+    fig.savefig("figures/string processing/PROMICE_" + site + ".png", dpi=90)
+
+
+# %% 10 m firn temp
+df_PROMICE = pd.DataFrame()
+
+for i in df_info.index:
+    site = df_info.loc[i, 'stid']
+    print(site)
+    df_aws = pd.read_csv(path_to_PROMICE+site+'_L4.csv')
+    df_aws['time'] = pd.to_datetime(df_aws.time, utc=True)
+    df_aws = df_aws.set_index('time')
+    
+    if df_aws['t_i_10m'].isnull().all():
+        print('No 10m temperature data')
+        continue
+
+    df_10 = df_aws[['t_i_10m']].copy()
+    df_10.columns = ['temperatureObserved']
+    df_10.index = df_10.index.rename('date')
+    
+    df_10["latitude"] = df_info.loc[i, "lat"]
+    df_10["longitude"] = df_info.loc[i, "lon"]
+    df_10["elevation"] = df_info.loc[i, "alt"]
+    df_10["site"] = site
+    df_10["depthOfTemperatureObservation"] = 10
+    df_10["note"] = ""
+
+    # filtering
+    df_10.loc[df_10["temperatureObserved"] > 0.1, "t_i_10m"] = np.nan
+    df_10.loc[df_10["temperatureObserved"] < -70, "t_i_10m"] = np.nan
+    
+    df_PROMICE = pd.concat((df_PROMICE, df_10.reset_index()))
+
+df_PROMICE = df_PROMICE.set_index("date")
+df_PROMICE_month_mean = df_PROMICE.groupby("site").resample("M").mean().reset_index("site")
+df_PROMICE = df_PROMICE.loc[df_PROMICE.t_i_10m.notnull(), :]
+
+df_PROMICE_month_mean.to_csv("Data/PROMICE/PROMICE_10m_firn_temperature.csv", sep=";")
+
+
