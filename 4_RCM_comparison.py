@@ -1170,7 +1170,7 @@ units = [
     "$^o$C decade$^{-1}$",
     "$^o$C decade$^{-1}$",
 ]
-# %%
+
 fig, ax = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(10, 12))
 ax = ax.flatten()
 vmin = -1.5

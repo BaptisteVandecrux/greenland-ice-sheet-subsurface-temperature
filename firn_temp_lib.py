@@ -10,7 +10,6 @@ tip list:
 import numpy as np
 import pandas as pd
 import tables as tb
-import progressbar
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from datetime import datetime as dt
@@ -59,9 +58,6 @@ def interpolate_temperature(
         df_interp.iloc[:5, 1] = np.nan
     # df_interp['temperatureObserved']  = df_interp['temperatureObserved'].interpolate(limit=24*7).values
     if plot:
-        import matplotlib.dates as mdates
-
-        myFmt = mdates.DateFormatter("%Y-%m")
 
         for i in range(len(depth_cor[0, :]) - 1, 0, -1):
             if all(np.isnan(depth_cor[:, i])):
@@ -85,7 +81,6 @@ def interpolate_temperature(
         )
         ax1.set_xlim(min(dates), max(dates))
         ax1.set_ylabel("Height (m)")
-        ax1.xaxis.set_major_formatter(myFmt)
         ax1.tick_params(axis="x", rotation=45)
 
         for i in range(np.shape(depth_cor)[1]):
@@ -100,7 +95,6 @@ def interpolate_temperature(
         )
         ax2.set_ylabel("Firn temperature (degC)")
         ax2.set_ylim(np.nanmin(temp) * 1.2, min(1, 0.8 * np.nanmax(temp)))
-        ax2.xaxis.set_major_formatter(myFmt)
         ax2.tick_params(axis="x", rotation=45)
         ax2.axes.grid()
         ax2.set_xlim(min(dates), max(dates))
@@ -487,13 +481,10 @@ def load_metadata(filepath, sites):
     statmeta_df["rtd_date"] = pd.to_datetime(
         statmeta_df.RTD_installation_daynumber_YYYYMMDD.values, format="%Y%m%d"
     )
-    zz = []
-    for ii in range(len(statmeta_df.RTD_depths_at_installation_m[0])):
-        st = "rtd%s" % ii
-        zz.append(st)
-    zz = np.flip(zz)
+    firn_temp_cols = ['rtd'+str(ii) for ii in range(len(statmeta_df.RTD_depths_at_installation_m[0]))]
+    firn_temp_cols = np.flip(firn_temp_cols)
 
-    statmeta_df[zz] = pd.DataFrame(
+    statmeta_df[firn_temp_cols] = pd.DataFrame(
         statmeta_df.RTD_depths_at_installation_m.values.tolist(),
         index=statmeta_df.index,
     )
@@ -620,35 +611,10 @@ def load_metadata(filepath, sites):
             sonic_df.loc[[site]].sonic_m - sonic_df.loc[(site, dd)].sonic_m
         )
 
-    rtd_depth_df = statmeta_df[zz].copy()
-    zz2 = [
-        "depth_0",
-        "depth_1",
-        "depth_2",
-        "depth_3",
-        "depth_4",
-        "depth_5",
-        "depth_6",
-        "depth_7",
-        "depth_8",
-        "depth_9",
-        "depth_10",
-        "depth_11",
-        "depth_12",
-        "depth_13",
-        "depth_14",
-        "depth_15",
-        "depth_16",
-        "depth_17",
-        "depth_18",
-        "depth_19",
-        "depth_20",
-        "depth_21",
-        "depth_22",
-        "depth_23",
-    ]
-    zz2 = np.flip(zz2)
-    rtd_depth_df.columns = zz2
+    rtd_depth_df = statmeta_df[firn_temp_cols].copy()
+    depth_cols = ["depth_" + str(i) for i in range(len(firn_temp_cols))]
+    depth_cols = np.flip(depth_cols)
+    rtd_depth_df.columns = depth_cols
 
     xx = statmeta_df.RTD_top_usable_RTD_num
     for site in sites:
@@ -658,7 +624,7 @@ def load_metadata(filepath, sites):
         rtd_depth_df.loc[site] = vv
     rtd_d = sonic_df.join(rtd_depth_df, how="inner")
     rtd_dc = rtd_d.copy()
-    rtd_dep = rtd_dc[zz2].add(-rtd_dc["delta"], axis="rows")
+    rtd_dep = rtd_dc[depth_cols].add(-rtd_dc["delta"], axis="rows")
 
     rtd_df = pd.DataFrame.from_records(
         datatable.Firn_Temp_Daily[:].tolist(),
@@ -668,20 +634,21 @@ def load_metadata(filepath, sites):
     rtd_df["date"] = pd.to_datetime(rtd_df.daynumber_YYYYMMDD.values, format="%Y%m%d")
     rtd_df = rtd_df.set_index(["sitename", "date"])
 
-    rtd_df[zz] = pd.DataFrame(
+    rtd_df[firn_temp_cols] = pd.DataFrame(
         rtd_df.RTD_temp_avg_corrected_C.values.tolist(), index=rtd_df.index
     )
 
     # filtering
-    rtd_df.replace(-100.0, np.nan, inplace=True)
-
+    for col in firn_temp_cols:
+        rtd_df.loc[rtd_df[col]==-100.0, col] = np.nan
+    
     for i in range(0, 4):
-        vals = rtd_df.loc["Crawford", zz[i]].values
+        vals = rtd_df.loc["Crawford", firn_temp_cols[i]].values
         vals[vals > -1] = np.nan
-        rtd_df.loc["Crawford", zz[i]] = vals
+        rtd_df.loc["Crawford", firn_temp_cols[i]] = vals
     rtd_df = rtd_df.join(rtd_dep, how="inner").sort_index(axis=0)
     for site in sites:
-        rtd_df.loc[site, zz][:14] = np.nan
+        rtd_df.loc[site, firn_temp_cols][:14] = np.nan
     return statmeta_df, sonic_df, rtd_df, rtd_dep, metdata_df
 
 

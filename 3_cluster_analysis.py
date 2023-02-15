@@ -27,7 +27,7 @@ import time
 # T = A*np.exp(-z * np.sqrt(om/2/kappa) * np.cos(om*t - z*np.sqrt(om/2/kappa) + eps)
 
 # %% Studying clusters
-df = pd.read_csv("10m_temperature_dataset_monthly.csv")
+df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
 import geopandas as gpd
 
 # ============ To fix ================
@@ -63,7 +63,7 @@ df = df.loc[
 
 df_no_temp = df.loc[df.temperatureObserved.isnull(), :]
 df = df.loc[~df.temperatureObserved.isnull(), :]
-
+df['date'] = pd.to_datetime(df.date,utc=True, errors='coerce')
 df["year"] = pd.DatetimeIndex(df.date).year
 
 gdf = (
@@ -122,6 +122,7 @@ print("Estimated number of clusters: %d" % n_clusters_)
 print("Estimated number of noise points: %d" % n_noise_)
 
 #  Black removed and is used for noise instead.
+plt.close('all')
 fig, ax = plt.subplots(1, 1, figsize=(6, 9))
 fig.subplots_adjust(hspace=0.0, wspace=0.0, top=1, bottom=0, left=0, right=1)
 land.plot(ax=ax, zorder=0, color="black")
@@ -171,15 +172,15 @@ gdf = gdf.set_index(["clusters", "date"])
 i = -1
 
 import matplotlib.cm as cm
-
+plt.close('all')
 # cmap = cm.get_cmap('tab20', len(ref_all))    # PiYG
 # cmap.set_under('b')
 # cmap.set_over('b')
 handles = list()
 labels = list()
 import matplotlib.dates as mdates
-
-for cluster_id in [7]:  # unique_labels:
+sym= 'o d ^ v > < s x *'.split()
+for cluster_id in unique_labels:
     if cluster_id == -1:
         continue
 
@@ -191,27 +192,20 @@ for cluster_id in [7]:  # unique_labels:
         print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year))
 
         # i = i+1
-        fig, ax = plt.subplots(1, 1, figsize=(20, 20))
+        fig, ax = plt.subplots(1, 1, figsize=(13, 10))
         ax = [ax]
         i = 0
         for ref in ref_list:
-            if ref == "FirnCover":
-                tmp.loc[tmp.reference_short == ref].temperatureObserved.plot(
+            if ref == "PROMICE":
+                tmp2 = tmp.loc[tmp.reference_short == ref,:]
+                for k, site in enumerate(tmp2.site.unique()):
+                    tmp2.loc[tmp2.site == site, :].temperatureObserved.plot(
                     ax=ax[i],
-                    marker="o",
+                    marker=sym[k],
                     markersize=6,
                     linestyle="none",
-                    label=ref,
-                    color="tab:red",
-                )
-            elif ref == "Covi et al.":
-                tmp.loc[tmp.reference_short == ref].temperatureObserved.plot(
-                    ax=ax[i],
-                    marker="o",
-                    markersize=6,
-                    linestyle="none",
-                    color="tab:blue",
-                    label=ref,
+                    label=ref+' '+site,
+                    color="purple",
                 )
             else:
                 tmp.loc[tmp.reference_short == ref].temperatureObserved.plot(
@@ -222,9 +216,11 @@ for cluster_id in [7]:  # unique_labels:
         ax[i].set_xlabel("")
         ax[i].set_title(str(np.unique(tmp.site)))
         ax[i].legend()
+        ax[i].set_ylim(-33, 2)
+        ax[i].grid()
 
     # if i not in [12, 13, 14]:
     #     ax[i].set_xticklabels('')
 
 # fig.text(0.05, 0.7, "10 m subsurface temperature ($^o$C)", ha='center', va='center', rotation='vertical',fontsize=12)
-fig.savefig("figures/clusters/clusters_all.png")
+        fig.savefig("figures/clusters/"+tmp.site.unique()[-1]+".png")

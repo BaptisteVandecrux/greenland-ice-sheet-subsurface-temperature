@@ -23,7 +23,7 @@ path_to_PROMICE = 'C:/Users/bav/OneDrive - Geological survey of Denmark and Gree
 for site in df_info['stid']:
     # break
     #     # %%
-    plt.close('all')
+    # plt.close('all')
     # site = 'TAS_A'
     
     df_aws = pd.read_csv(path_to_PROMICE+site+'_L4.csv')

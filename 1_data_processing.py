@@ -42,22 +42,7 @@ def interp_pandas(s, kind="quadratic"):
 # %% Mock and Weeks
 print("Loading Mock and Weeks")
 df_all = pd.DataFrame(
-    columns=[
-        "date",
-        "site",
-        "latitude",
-        "longitude",
-        "elevation",
-        "depthOfTemperatureObservation",
-        "temperatureObserved",
-        "reference",
-        "reference_short",
-        "note",
-        "error",
-        "durationOpen",
-        "durationMeasured",
-        "method",
-    ]
+    columns=[ "date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
 )
 
 df_MW = pd.read_excel("Data/MockandWeeks/CRREL RR- 170 digitized.xlsx")
@@ -85,26 +70,11 @@ df_MW[
     "method"
 ] = "thermohms and a Wheats tone bridge, standard mercury or alcohol thermometers"
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_MW[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Benson (not reported in Mock and Weeks)
@@ -136,26 +106,11 @@ df_benson["error"] = "NA"
 df_benson["method"] = "Weston bimetallic thermometers"
 
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_benson[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Polashenski
@@ -179,26 +134,11 @@ df_Pol["durationMeasured"] = "overnight ~10 hours"
 df_Pol["error"] = 0.1
 df_Pol["method"] = "thermistor string"
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_Pol[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Ken's dataset
@@ -208,26 +148,11 @@ df_Ken = pd.read_excel(
 )
 
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_Ken[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 # %% Sumup
 df_sumup = pd.read_csv("Data/Sumup/SUMup_temperature_2022.csv")
@@ -293,26 +218,11 @@ df_sumup = df_sumup.rename(
         "Method": "method",
     }
 )
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_sumup[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # ====> only temperature at 18m depth
@@ -352,26 +262,11 @@ df_mcgrath["durationOpen"] = 0
 df_mcgrath["durationMeasured"] = 30
 df_mcgrath["error"] = 0.07
 df_mcgrath
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_mcgrath[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 #  adding real date to Benson's measurement
@@ -446,26 +341,11 @@ df_hawley["durationOpen"] = 2
 df_hawley["durationMeasured"] = 0
 df_hawley["error"] = "not reported"
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_hawley[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% PROMICE
@@ -488,65 +368,20 @@ df_promice[
     "reference"
 ] = "Fausto, R.S. and van As, D., (2019). Programme for monitoring of the Greenland ice sheet (PROMICE): Automatic weather station data. Version: v03, Dataset published via Geological Survey of Denmark and Greenland. DOI: https://doi.org/10.22008/promice/data/aws"
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_promice[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
-# %%  GC-Net
+# %%  GC-Net from JoG 2020
 print("Loading GC-Net")
 time.sleep(0.2)
 
-sites = [
-    "CP1",
-    "NASA-U",
-    "Summit",
-    "TUNU-N",
-    "DYE-2",
-    "Saddle",
-    "SouthDome",
-    "NASA-E",
-    "NASA-SE",
-]
-lat = [
-    69.87975,
-    73.84189,
-    72.57972,
-    78.01677,
-    66.48001,
-    65.99947,
-    63.14889,
-    75,
-    66.4797,
-]
-lon = [
-    -46.98667,
-    -49.49831,
-    -38.50454,
-    -33.99387,
-    -46.27889,
-    -44.50016,
-    -44.81717,
-    -29.99972,
-    -42.5002,
-]
+sites = [ "CP1", "NASA-U", "Summit", "TUNU-N", "DYE-2", "Saddle", "SouthDome", "NASA-E", "NASA-SE"]
+lat = [ 69.87975, 73.84189, 72.57972, 78.01677, 66.48001, 65.99947, 63.14889, 75, 66.4797]
+lon = [ -46.98667, -49.49831, -38.50454, -33.99387, -46.27889, -44.50016, -44.81717, -29.99972, -42.5002]
 elev = [2022, 2369, 3254, 2113, 2165, 2559, 2922, 2631, 2425]
 
 df_gcnet = pd.DataFrame()
@@ -576,7 +411,7 @@ for ii, site in (enumerate(sites)):
     df_10["latitude"] = lat[ii]
     df_10["longitude"] = lon[ii]
     df_10["elevation"] = elev[ii]
-    df_gcnet = df_gcnet.append(df_10)
+    df_gcnet = pd.concat((df_gcnet, df_10))
 
 df_gcnet[
     "reference"
@@ -584,7 +419,7 @@ df_gcnet[
 
 df_gcnet["reference_short"] = "Steffen et al. (1996)"
 
-df_gcnet["note"] = ""
+df_gcnet["note"] = "as in Vandecrux et al. JoG 2020"
 df_gcnet["depthOfTemperatureObservation"] = 10
 
 df_gcnet["method"] = "thermocouple"
@@ -592,30 +427,15 @@ df_gcnet["durationOpen"] = 0
 df_gcnet["durationMeasured"] = 30 * 24
 df_gcnet["error"] = 0.5
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_gcnet[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 
-# %% GC-Net
+# %% GC-Net other sites
 print("Loading GC-Net")
 df_GCN = pd.read_csv("Data/GC-Net/10m_firn_temperature.csv")
 df_GCN = df_GCN.loc[df_GCN.temperatureObserved.notnull()]
@@ -625,26 +445,11 @@ df_GCN["method"] = "thermocouple"
 df_GCN["durationOpen"] = 0
 df_GCN["durationMeasured"] = 30 * 24
 df_GCN["error"] = 0.5
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_GCN[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Steffen 2001 table
@@ -658,55 +463,38 @@ df[
 ] = "Steffen, K. and J. Box (2001), Surface climatology of the Greenland ice sheet: Greenland Climate Network 1995-1999, J. Geophys. Res., 106, 33,951-33,972"
 df["reference_short"] = "Steffen et al. (2001)"
 df["error"] = 0.5
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
-# %% GCNv2
-print("Loading GCNv2")
-df_GCNv2 = pd.read_csv("Data/GCNv2/10m_firn_temperature.csv")
-df_GCNv2 = df_GCNv2.loc[df_GCNv2.temperatureObserved.notnull()]
-df_GCNv2["method"] = "thermocouple"
-df_GCNv2["durationOpen"] = 0
-df_GCNv2["durationMeasured"] = 30 * 24
-df_GCNv2["error"] = 0.05
-df_all = df_all.append(
-    df_GCNv2[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+
+#%% Historical swc
+df_swc = pd.DataFrame()
+df_swc["depthOfTemperatureObservation"] = [10]*3
+df_swc["site"] = ["SwissCamp"]*3
+df_swc["latitude"] = [df.iloc[0,1]]*3
+df_swc["longitude"] = [-df.iloc[0,2]]*3
+df_swc["elevation"] = [3260]*3
+df_swc["note"] = [""]*3
+df_swc["temperatureObserved"] = [-9.1, -9.3, -0.3]
+df_swc["date"] = pd.to_datetime(["1990-07-01","1990-08-01","1990-08-24" ])
+df_swc["reference_short"] = ["Ohmura et al. (1992)"]*3
+df_swc[
+    "reference"
+] = ["Ohmura, A. and 10 others. 1992; Energy and Mass balance during the melt season at the equilibrium line altitude, Paakitsoq, Greenland ice sheet. Zürich, Swiss Federal Institute of Technology. (ETH Greenland Expedition. Progress Report 2.)"]*3
+
+df_swc["method"] = ["NA"]*3
+df_swc["durationOpen"] = ["NA"]*3
+df_swc["durationMeasured"] =[ "NA"]*3
+df_swc["error"] = ["NA"]*3
+
+df_all = pd.concat((df_all, 
+    df_swc[
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Miege aquifer
@@ -769,7 +557,7 @@ for k, site in enumerate(["FA_13", "FA_15_1", "FA_15_2"]):
     df_10["note"] = "interpolated to 10 m, monthly snapshot"
     # plt.figure()
     # df_10.temperatureObserved.plot()
-    df_miege = df_miege.append(df_10.reset_index())
+    df_miege = pd.concat((df_miege, df_10.reset_index()))
 
 df_miege["method"] = "digital thermarray system from RST©"
 df_miege["durationOpen"] = 0
@@ -777,26 +565,11 @@ df_miege["durationMeasured"] = 30
 df_miege["error"] = 0.07
 
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_miege[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Harper ice temperature
@@ -808,7 +581,6 @@ num_row = df_harper.shape[0]
 df_harper["date"] = np.nan
 df_harper["temperatureObserved"] = np.nan
 df_harper["note"] = ""
-df_harper = df_harper.append(df_harper)
 df_harper["borehole"].iloc[:num_row] = df_harper["borehole"].iloc[:num_row] + "_2015"
 df_harper["borehole"].iloc[num_row:] = df_harper["borehole"].iloc[num_row:] + "_2016"
 df_harper["date"].iloc[:num_row] = pd.to_datetime("2015-01-01")
@@ -822,14 +594,7 @@ df_harper["temperatureObserved"].iloc[num_row:] = df_harper[
 df_harper["depth"] = df_harper.depth_m - df_harper.height_m
 df_harper = df_harper.loc[df_harper.depth < 100]
 df_harper = df_harper.drop(
-    columns=[
-        "height_m",
-        "temperature_2015_celsius",
-        "temperature_2016_celsius",
-        "yearDrilled",
-        "dateDrilled",
-        "depth_m",
-    ]
+    columns=["height_m", "temperature_2015_celsius", "temperature_2016_celsius", "yearDrilled", "dateDrilled", "depth_m"]
 )
 df_harper = df_harper.loc[df_harper.temperatureObserved.notnull()]
 
@@ -842,7 +607,7 @@ for borehole in df_harper["borehole"].unique():
     new_row = df_harper.loc[df_harper["borehole"] == borehole].iloc[0, :].copy()
     new_row["depth"] = 10
     new_row["temperatureObserved"] = np.nan
-    df_harper = df_harper.append(new_row)
+    df_harper = pd.concat((df_harper, new_row))
 
 df_harper = df_harper.set_index(["depth"]).sort_index()
 
@@ -884,26 +649,11 @@ df_harper["durationOpen"] = 0
 df_harper["durationMeasured"] = 30 * 24
 df_harper["error"] = 0.1
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_harper[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %%  FirnCover
@@ -935,7 +685,7 @@ for site in sites:
     df_10["longitude"] = statmeta_df.loc[site, "longitude"]
     df_10["elevation"] = statmeta_df.loc[site, "elevation"]
 
-    df_firncover = df_firncover.append(df_10)
+    df_firncover = pd.concat((df_firncover, df_10))
 df_firncover[
     "reference"
 ] = "MacFerrin, M. J., Stevens, C. M., Vandecrux, B., Waddington, E. D., and Abdalati, W. (2022) The Greenland Firn Compaction Verification and Reconnaissance (FirnCover) dataset, 2013–2019, Earth Syst. Sci. Data, 14, 955–971, https://doi.org/10.5194/essd-14-955-2022,"
@@ -952,26 +702,11 @@ df_firncover["durationOpen"] = 0
 df_firncover["durationMeasured"] = 30 * 24
 df_firncover["error"] = 0.5
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_firncover[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% SPLAZ KAN_U
@@ -1014,7 +749,7 @@ for k, note in enumerate(["SPLAZ_main", "SPLAZ_2", "SPLAZ_3"]):
     df_10["latitude"] = 67.000252
     df_10["longitude"] = -47.022999
     df_10["elevation"] = 1840
-    df_splaz = df_splaz.append(df_10)
+    df_splaz = pd.concat((df_splaz, df_10))
 df_splaz[
     "reference"
 ] = "Charalampidis, C., Van As, D., Colgan, W.T., Fausto, R.S., Macferrin, M. and Machguth, H., 2016. Thermal tracing of retained meltwater in the lower accumulation area of the Southwestern Greenland ice sheet. Annals of Glaciology, 57(72), pp.1-10."
@@ -1028,26 +763,11 @@ df_splaz["durationMeasured"] = 30 * 24
 df_splaz["error"] = 0.2
 
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_splaz[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Load Humphrey data
@@ -1082,51 +802,13 @@ for site in df.site:
     df_site = df_site.set_index("time")
     df_site = df_site.resample("H").mean()
 
-    depth = [
-        0.25,
-        0.50,
-        0.75,
-        1.00,
-        1.25,
-        1.50,
-        1.75,
-        2.00,
-        2.25,
-        2.50,
-        2.75,
-        3.00,
-        3.25,
-        3.50,
-        3.75,
-        4.00,
-        4.25,
-        4.50,
-        4.75,
-        5.00,
-        5.25,
-        5.00,
-        5.50,
-        6.00,
-        6.50,
-        7.00,
-        7.50,
-        8.00,
-        8.50,
-        9.00,
-        9.50,
-        10.0,
-    ]
+    depth = [0.25, 0.50, 0.75, 1.00, 1.25, 1.50, 1.75, 2.00, 2.25, 2.50, 2.75, 3.00, 3.25, 3.50, 3.75, 4.00, 4.25, 4.50, 4.75, 5.00, 5.25, 5.00, 5.50, 6.00, 6.50, 7.00, 7.50, 8.00, 8.50, 9.00, 9.50, 10.0]
 
-    if site != "H5":
-        df_site = df_site.iloc[24 * 30 :, :]
-    if site == "T4":
-        df_site = df_site.loc[:"2007-12-05"]
-    if site == "H2":
-        depth = np.array(depth) - 1
-    if site == "H4":
-        depth = np.array(depth) - 0.75
-    if site in ["H3", "G165", "T1new"]:
-        depth = np.array(depth) - 0.50
+    if site != "H5": df_site = df_site.iloc[24 * 30 :, :]
+    if site == "T4": df_site = df_site.loc[:"2007-12-05"]
+    if site == "H2": depth = np.array(depth) - 1
+    if site == "H4": depth = np.array(depth) - 0.75
+    if site in ["H3", "G165", "T1new"]: depth = np.array(depth) - 0.50
 
     df_hs = pd.read_csv("Data/Humphrey string/" + site + "_surface_height.csv")
     df_hs.time = pd.to_datetime(df_hs.time)
@@ -1135,7 +817,7 @@ for site in df.site:
     df_site["surface_height"] = np.nan
 
     df_site["surface_height"] = df_hs.iloc[
-        [df_hs.index.get_loc(index, method="nearest") for index in df_site.index]
+        df_hs.index.get_indexer(df_site.index, method="nearest")
     ].values
 
     depth_label = ["depth_" + str(i) for i in range(1, len(temp_label) + 1)]
@@ -1163,7 +845,7 @@ for site in df.site:
     df_10["longitude"] = df.loc[df.site == site, "longitude"].values[0]
     df_10["elevation"] = df.loc[df.site == site, "elevation"].values[0]
 
-    df_humphrey = df_humphrey.append(df_10)
+    df_humphrey = pd.concat((df_humphrey, df_10))
 df_humphrey = df_humphrey.reset_index(drop=True)
 df_humphrey = df_humphrey.loc[df_humphrey.temperatureObserved.notnull()]
 df_humphrey["depthOfTemperatureObservation"] = 10
@@ -1181,26 +863,11 @@ df_humphrey["durationMeasured"] = 30 * 24
 df_humphrey["error"] = 0.5
 
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_humphrey[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% loading Hills
@@ -1274,7 +941,7 @@ for site in df_meta.site[:-1]:
     df_10["elevation"] = df_meta.elevation[df_meta.site == site].iloc[0]
     df_10["depthOfTemperatureObservation"] = 10
     df_10["site"] = site
-    df_hills = df_hills.append(df_10)
+    df_hills = pd.concat((df_hills, df_10))
 
 df_hills["note"] = "monthly mean, interpolated at 10 m"
 df_hills[
@@ -1290,26 +957,11 @@ df_hills["durationMeasured"] = 30 * 24
 df_hills["error"] = 0.0625
 
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_hills[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Achim Dye-2
@@ -1319,17 +971,7 @@ print("Loading Achim Dye-2")
 
 # loading temperature data
 df = pd.read_csv("Data/Achim/CR1000_PT100.txt", header=None)
-df.columns = [
-    "time_matlab",
-    "temp_1",
-    "temp_2",
-    "temp_3",
-    "temp_4",
-    "temp_5",
-    "temp_6",
-    "temp_7",
-    "temp_8",
-]
+df.columns = [ "time_matlab", "temp_1", "temp_2", "temp_3", "temp_4", "temp_5", "temp_6", "temp_7", "temp_8"]
 df["time"] = pd.to_datetime(
     [
         datetime.fromordinal(int(matlab_datenum))
@@ -1367,7 +1009,7 @@ _, sonic_df, _, _, _ = ftl.load_metadata(filepath, sites)
 sonic_df = sonic_df.xs("DYE-2", level="sitename").reset_index()
 sonic_df = sonic_df.set_index("date").drop(columns="delta").resample("D").mean()
 
-sonic_df = sonic_df.append(df_surf.loc[sonic_df.index[-1] :] - 1.83)
+sonic_df = pd.concat((sonic_df, df_surf.loc[sonic_df.index[-1] :] - 1.83))
 
 plt.figure()
 sonic_df.sonic_m.plot()
@@ -1427,26 +1069,11 @@ df_achim["durationOpen"] = 0
 df_achim["durationMeasured"] = 30 * 24
 df_achim["error"] = 0.25
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_achim[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 
@@ -1477,7 +1104,7 @@ df_cen2.loc[:'2021-08-24',"SurfaceHeight_summary(m)"] = np.nan
 df_cen2.loc['2022-06-17':,"SurfaceHeight_summary(m)"] =df_cen2.loc['2022-06-17':,"SurfaceHeight_summary(m)"] + 0.85
 
 
-df_promice = df_promice.append(df_cen2["SurfaceHeight_summary(m)"] )
+df_promice = pd.concat((df_promice, df_cen2["SurfaceHeight_summary(m)"] ))
 df_promice = df_promice.resample('D').mean().interpolate()
 
 temp_label = ["T_" + str(i + 1) for i in range(len(df.columns))]
@@ -1485,33 +1112,7 @@ depth_label = ["depth_" + str(i + 1) for i in range(len(df.columns))]
 
 df["surface_height"] = df_promice.loc[df.index[0].strftime('%Y-%m-%d'):df.index[-1].strftime('%Y-%m-%d')].values
 
-depth = [
-    0,
-    2,
-    4,
-    6,
-    8,
-    10,
-    12,
-    14,
-    16,
-    18,
-    21,
-    24,
-    27,
-    30,
-    33,
-    36,
-    39,
-    42,
-    45,
-    48,
-    53,
-    58,
-    63,
-    68,
-    73,
-]
+depth = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45, 48, 53, 58, 63, 68, 73]
 
 for i in range(len(temp_label)):
     df = df.rename(columns={i + 1: temp_label[i]})
@@ -1527,7 +1128,7 @@ df_10 = ftl.interpolate_temperature(
 )
 df_10.loc[df_10.temperatureObserved>-15, "temperatureObserved"] = np.nan
 df_10 = df_10.set_index("date", drop=False).resample("M").mean().reset_index()
-df_10["site"] = "CEN"
+df_10["site"] = "CEN_THM_long"
 df_10["latitude"] = 77.1333
 df_10["longitude"] = -61.0333
 df_10["elevation"] = 1880
@@ -1541,26 +1142,11 @@ df_10["method"] = "thermistors"
 df_10["durationOpen"] = 0
 df_10["durationMeasured"] = 30 * 24
 df_10["error"] = 0.2
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_10[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 df = pd.read_csv("Data/Camp Century Climate/data_short.txt", sep=",", header=None)
@@ -1575,33 +1161,7 @@ df["surface_height"] = df_promice.loc[df.index[0].strftime('%Y-%m-%d'):df.index[
 
 # plt.figure()
 # df_10.temperatureObserved.plot()
-depth = [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    11,
-    13,
-    15,
-    17,
-    19,
-    22,
-    25,
-    28,
-    31,
-    34,
-    38,
-    42,
-    46,
-    50,
-    54,
-]
+depth = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 15, 17, 19, 22, 25, 28, 31, 34, 38, 42, 46, 50, 54]
 
 for i in range(len(temp_label)):
     df = df.rename(columns={i + 1: temp_label[i]})
@@ -1617,7 +1177,7 @@ df_10 = ftl.interpolate_temperature(
 )
 df_10.loc[df_10.temperatureObserved > -15, "temperatureObserved"] = np.nan
 df_10 = df_10.set_index("date", drop=False).resample("M").mean().reset_index()
-df_10["site"] = "CEN"
+df_10["site"] = "CEN_THM_short"
 df_10["latitude"] = 77.1333
 df_10["longitude"] = -61.0333
 df_10["elevation"] = 1880
@@ -1633,26 +1193,11 @@ df_10["durationOpen"] = 0
 df_10["durationMeasured"] = 30 * 24
 df_10["error"] = 0.2
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_10[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Camp Century historical
@@ -1676,27 +1221,18 @@ df_cc_hist["method"] = "NA"
 df_cc_hist["durationOpen"] = "NA"
 df_cc_hist["durationMeasured"] = "NA"
 df_cc_hist["error"] = "NA"
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_cc_hist[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
+
+for site in ['CEN1', 'CEN2', 'CEN','CEN_THM_short','CEN_THM_long']:
+    df_all.loc[df_all.site==site,'note'] = df_all.loc[df_all.site==site,'note'] + ' ' +\
+                                            df_all.loc[df_all.site==site,'site']
+    df_all.loc[df_all.site==site,'site'] = 'Camp Century'  
+
 
 # %% Davies dataset
 df_davies = pd.read_excel("Data/Davies South Dome/table_3_digitized.xlsx")
@@ -1712,26 +1248,11 @@ df_davies["durationOpen"] = 0
 df_davies["durationMeasured"] = 0
 df_davies["error"] = 0.5
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_davies[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %%  Echelmeyer Jakobshavn isbræ
@@ -1770,32 +1291,17 @@ for site in ["L20", "L23"]:
         tmp.temperatureObserved = f(10)
         tmp.depthOfTemperatureObservation = 10
         tmp.note = "digitized, interpolated at 10 m"
-        df_echel = df_echel.append(tmp)
+        df_echel = pd.concat((df_echel, tmp))
 
 df_echel["method"] = "thermistors and thermocouples"
 df_echel["durationOpen"] = 0
 df_echel["durationMeasured"] = 0
 df_echel["error"] = 0.3
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_echel[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Fischer de Quervain EGIG
@@ -1806,26 +1312,11 @@ df_fischer[
 ] = "Fischer, H., Wagenbach, D., Laternser, M. & Haeberli, W., 1995. Glacio-meteorological and isotopic studies along the EGIG line, central Greenland. Journal of Glaciology, 41(139), pp. 515-527."
 df_fischer["reference_short"] = "Fischer et al. (1995)"
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_fischer[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 df_dequervain = pd.read_csv("Data/Fischer EGIG/DeQuervain.txt", index_col=False)
@@ -1848,26 +1339,11 @@ df_dequervain["durationOpen"] = 0
 df_dequervain["durationMeasured"] = 0
 df_dequervain["error"] = 0.2
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_dequervain[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Larternser EGIG
@@ -1898,7 +1374,7 @@ for i in np.unique(ind):
     tmp.temperatureObserved = f(10)
     tmp.depthOfTemperatureObservation = 10
     tmp.note = "interpolated at 10 m, " + tmp.note
-    df_interp = df_interp.append(tmp)
+    df_interp = pd.concat((df_interp, tmp))
 
     plt.figure()
     plt.plot(
@@ -1907,39 +1383,24 @@ for i in np.unique(ind):
     plt.plot(tmp.temperatureObserved, -tmp.depthOfTemperatureObservation, marker="o")
     plt.title(tmp.site)
 
-df_laternser = df_laternser.append(df_interp)
+df_laternser = pd.concat((df_laternser, df_interp))
 
 df_laternser["method"] = "Fenwal 197-303 KAG-401 thermistors"
 df_laternser["durationOpen"] = 0
 df_laternser["error"] = 0.02
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_laternser[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 # %% Wegener 1929-1930
 df1 = pd.read_csv("Data/Wegener 1930/200mRandabst_firtemperature_wegener.csv", sep=";")
 df3 = pd.read_csv("Data/Wegener 1930/ReadMe.txt", sep=";")
 
 df1["depth"] = df1.depth / 100
-df1 = df1.append({"Firntemp": np.nan, "depth": 10}, ignore_index=True)
+df1 = pd.concat((df1, pd.DataFrame.from_dict({"depth": [10], "Firntemp": [np.nan]})), ignore_index=True)
 df1 = interp_pandas(df1.set_index("depth"), kind="linear")
 
 df_wegener = pd.DataFrame.from_dict(
@@ -1970,7 +1431,7 @@ df_new["longitude"] = df3.longitude.iloc[1]
 df_new["elevation"] = df3.elevation.iloc[1]
 df_new["site"] = df3.name.iloc[1]
 df_new["reference"] = df3.reference.iloc[1]
-df_wegener = df_wegener.append(df_new)
+df_wegener = pd.concat((df_wegener, df_new))
 df_wegener["reference_short"] = "Wegener (1930)"
 df_wegener["note"] = ""
 
@@ -1979,26 +1440,11 @@ df_wegener["durationOpen"] = "NA"
 df_wegener["durationMeasured"] = "NA"
 df_wegener["error"] = 0.2
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_wegener[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Japanese stations
@@ -2009,50 +1455,20 @@ df["method"] = "thermistor"
 df["durationOpen"] = "NA"
 df["durationMeasured"] = "NA"
 df["error"] = 0.1
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 df = pd.read_excel("Data/Japan/Sigma.xlsx")
 df["note"] = ""
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Ambach
@@ -2095,26 +1511,11 @@ meta["durationOpen"] = "NA"
 meta["durationMeasured"] = "NA"
 meta["error"] = "NA"
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     meta[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Kjær 2020 TCD data
@@ -2128,26 +1529,11 @@ df["method"] = "thermistor"
 df["durationOpen"] = 0
 df["durationMeasured"] = 0
 df["error"] = 0.1
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Covi
@@ -2237,26 +1623,12 @@ for site, filename in zip(sites, filenames):
     df_10["durationOpen"] = 0
     df_10["durationMeasured"] = 0
     df_10["error"] = 0.1
-    df_all = df_all.append(
+    df_all = pd.concat((df_all, 
         df_10[
-            [
-                "date",
-                "site",
-                "latitude",
-                "longitude",
-                "elevation",
-                "depthOfTemperatureObservation",
-                "temperatureObserved",
-                "reference",
-                "reference_short",
-                "note",
-                "error",
-                "durationOpen",
-                "durationMeasured",
-                "method",
+            [ "date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method",
             ]
         ],
-        ignore_index=True,
+        ), ignore_index=True,
     )
 
 # %% Stauffer and Oeschger 1979
@@ -2271,26 +1643,11 @@ df_s_o["method"] = "Fenwal Thermistor UUB 31-J1"
 df_s_o["durationOpen"] = 0
 df_s_o["durationMeasured"] = 0
 df_s_o["error"] = 0.1
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_s_o[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Schwager EGIG
@@ -2306,26 +1663,11 @@ df_schwager["method"] = "custom thermistors"
 df_schwager["durationOpen"] = 0
 df_schwager["durationMeasured"] = 12
 df_schwager["error"] = 0.5
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_schwager[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Giese & Hawley
@@ -2395,26 +1737,11 @@ df_giese["durationOpen"] = 0
 df_giese["durationMeasured"] = 24 * 30
 df_giese["error"] = 0.5
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_giese[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 #%% Historical summit
@@ -2437,26 +1764,11 @@ df_summit["durationOpen"] = "NA"
 df_summit["durationMeasured"] = "NA"
 df_summit["error"] = "NA"
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_summit[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% IMAU
@@ -2502,7 +1814,7 @@ for i, site in enumerate(["s5", "s6", "s9"]):
     df_10["latitude"] = df_meta.loc[df_meta.site == site, "latitude"].values[0]
     df_10["longitude"] = df_meta.loc[df_meta.site == site, "longitude"].values[0]
     df_10["elevation"] = df_meta.loc[df_meta.site == site, "elevation"].values[0]
-    df_imau = df_imau.append(df_10)
+    df_imau = pd.concat((df_imau, df_10))
 df_imau[
     "reference"
 ] = " Paul C. J. P. Smeets, Peter Kuipers Munneke, Dirk van As, Michiel R. van den Broeke, Wim Boot, Hans Oerlemans, Henk Snellen, Carleen H. Reijmer & Roderik S. W. van de Wal (2018) The K-transect in west Greenland: Automatic weather station data (1993–2016), Arctic, Antarctic, and Alpine Research, 50:1, DOI: 10.1080/15230430.2017.1420954"
@@ -2512,26 +1824,11 @@ df_imau["method"] = "thermistor"
 df_imau["durationOpen"] = 0
 df_imau["durationMeasured"] = 24 * 30
 df_imau["error"] = 0.2
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_imau[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Braithwaite
@@ -2548,26 +1845,11 @@ df["method"] = "thermistor"
 df["durationOpen"] = 0
 df["durationMeasured"] = 0
 df["error"] = 0.5
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Clement
@@ -2585,26 +1867,11 @@ df["durationOpen"] = 0
 df["durationMeasured"] = 0
 df["error"] = 0.5
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Nobles
@@ -2623,26 +1890,11 @@ df["durationOpen"] = 0
 df["durationMeasured"] = 0
 df["error"] = 0.5
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Schytt
@@ -2655,7 +1907,7 @@ for site in df.site.unique():
         df_date = df_site.loc[df_site.date == date]
         if df_date.shape[0] < 2:
             continue
-        tmp = df_date.iloc[0, :].copy()
+        tmp = df_date.iloc[0:1, :].copy()
 
         f = interp1d(
             df_date["depth"].values,
@@ -2665,14 +1917,14 @@ for site in df.site.unique():
         tmp.temperatureObserved = min(f(10), 0)
         tmp.depthOfTemperatureObservation = 10
         tmp.note = "digitized, interpolated at 10 m"
-        df_interp = df_interp.append(tmp)
+        df_interp = pd.concat((df_interp, tmp))
 
         plt.figure()
         plt.plot(df_date.temperatureObserved, -df_date.depth, marker="o")
         plt.plot(
             tmp.temperatureObserved, -tmp.depthOfTemperatureObservation, marker="o"
         )
-        plt.title(tmp.site + " " + tmp.date)
+        plt.title(tmp.site.values[0] + " " + tmp.date.values[0])
 
 
 df_interp["depthOfTemperatureObservation"] = 10
@@ -2688,26 +1940,11 @@ df_interp["durationOpen"] = 0
 df_interp["durationMeasured"] = 0
 df_interp["error"] = 0.5
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_interp[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Griffiths & Schytt
@@ -2720,7 +1957,7 @@ for site in df.site.unique():
         df_date = df_site.loc[df_site.date == date]
         if df_date.shape[0] < 2:
             continue
-        tmp = df_date.iloc[0, :].copy()
+        tmp = df_date.iloc[0:1, :].copy()
         if df_date["depth"].max() < 8:
             continue
         f = interp1d(
@@ -2731,14 +1968,14 @@ for site in df.site.unique():
         tmp.temperatureObserved = min(f(10), 0)
         tmp.depthOfTemperatureObservation = 10
         tmp.note = "digitized, interpolated at 10 m"
-        df_interp = df_interp.append(tmp)
+        df_interp =pd.concat(( df_interp, tmp))
 
         plt.figure()
         plt.plot(df_date.temperatureObserved, -df_date.depth, marker="o")
         plt.plot(
             tmp.temperatureObserved, -tmp.depthOfTemperatureObservation, marker="o"
         )
-        plt.title(tmp.site + " " + tmp.date)
+        plt.title(tmp.site.values[0] + " " + tmp.date.values[0])
 
 df_interp["depthOfTemperatureObservation"] = 10
 df_interp["date"] = pd.to_datetime(df_interp.date)
@@ -2752,26 +1989,11 @@ df_interp["durationOpen"] = 0
 df_interp["durationMeasured"] = 0
 df_interp["error"] = 0.5
 
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_interp[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Griffiths & Meier
@@ -2784,7 +2006,7 @@ for site in df.site.unique():
         df_date = df_site.loc[df_site.date == date]
         if df_date.shape[0] < 2:
             continue
-        tmp = df_date.iloc[0, :].copy()
+        tmp = df_date.iloc[0:1, :].copy()
         if df_date["depth"].max() < 8:
             continue
         f = interp1d(
@@ -2795,14 +2017,14 @@ for site in df.site.unique():
         tmp.temperatureObserved = min(f(10), 0)
         tmp.depthOfTemperatureObservation = 10
         tmp.note = "measurement made close to an open crevasse, digitized, interpolated at 10 m"
-        df_interp = df_interp.append(tmp)
+        df_interp = pd.concat((df_interp, tmp))
 
         plt.figure()
         plt.plot(df_date.temperatureObserved, -df_date.depth, marker="o")
         plt.plot(
             tmp.temperatureObserved, -tmp.depthOfTemperatureObservation, marker="o"
         )
-        plt.title(tmp.site + " " + tmp.date)
+        plt.title(tmp.site.values[0] + " " + tmp.date.values[0])
 
 df_interp["depthOfTemperatureObservation"] = 10
 df_interp["date"] = pd.to_datetime(df_interp.date)
@@ -2821,26 +2043,11 @@ df_interp["durationMeasured"] = 0
 df_interp["error"] = 0.5
 # only keeping measurements more than 1 m into the crevasse wall
 df_interp = df_interp.loc[df_interp["distance from crevasse"] >= 1, :]
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df_interp[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 
@@ -2883,7 +2090,7 @@ for i in np.unique(ind):
     tmp.temperatureObserved = f(np.log(10))
     tmp.depthOfTemperatureObservation = 10
     tmp.note = "digitized, interpolated at 10 m"
-    df_interp = df_interp.append(tmp)
+    df_interp = pd.concat((df_interp, tmp))
 
     plt.figure()
     plt.plot(
@@ -2898,7 +2105,7 @@ for i in np.unique(ind):
     plt.title(tmp.site)
 
     # core_df  = interp_pandas(core_df)
-df = df.append(df_interp)
+df = pd.concat((df, df_interp))
 
 df[
     "reference"
@@ -2908,26 +2115,11 @@ df["method"] = "thermistor"
 df["durationOpen"] = 8 * 24
 df["durationMeasured"] = 0
 df["error"] = 0.1
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Koch Wegener 1913
@@ -2944,26 +2136,11 @@ df["method"] = "electric resistance thermometer"
 df["durationOpen"] = "NA"
 df["durationMeasured"] = "NA"
 df["error"] = 0.2
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 
@@ -2991,26 +2168,11 @@ df["method"] = "thermistor"
 df["durationOpen"] = "NA"
 df["durationMeasured"] = "NA"
 df["error"] = 0.2
-df_all = df_all.append(
+df_all = pd.concat((df_all, 
     df[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-            "error",
-            "durationOpen",
-            "durationMeasured",
-            "method",
-        ]
+        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
     ],
-    ignore_index=True,
+    ), ignore_index=True,
 )
 
 # %% Checking values
@@ -3085,9 +2247,9 @@ for ref in df.reference_short.unique():
             df_loc_first = df_loc.set_index("date").resample("M").first()
             df_loc = df_loc.set_index("date").resample("M").mean()
             df_loc[
-                ["Unnamed: 0", "site", "reference", "reference_short", "note"]
+                ["Unnamed: 0", "site", "reference", "reference_short", "note",'error', 'durationOpen', 'durationMeasured', 'method']
             ] = df_loc_first[
-                ["Unnamed: 0", "site", "reference", "reference_short", "note"]
+                ["Unnamed: 0", "site", "reference", "reference_short", "note",'error', 'durationOpen', 'durationMeasured', 'method']
             ]
             if any(df_loc.depthOfTemperatureObservation.unique() != 10):
                 print("Some non-10 m depth")
@@ -3095,49 +2257,19 @@ for ref in df.reference_short.unique():
                 print(df_loc.loc[df_loc.depthOfTemperatureObservation != 10].head())
                 df_loc = df_loc.loc[df_loc.depthOfTemperatureObservation == 10, :]
 
-            df_m = df_m.append(
+            df_m = pd.concat((df_m, 
                 df_loc.reset_index()[
-                    [
-                        "date",
-                        "site",
-                        "latitude",
-                        "longitude",
-                        "elevation",
-                        "depthOfTemperatureObservation",
-                        "temperatureObserved",
-                        "reference",
-                        "reference_short",
-                        "note",
-                        "error",
-                        "durationOpen",
-                        "durationMeasured",
-                        "method",
-                    ]
+                    [ "date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
                 ],
-                ignore_index=True,
+                ), ignore_index=True,
             )
         else:
             print(ref, site, "... not averaging")
-            df_m = df_m.append(
+            df_m = pd.concat((df_m, 
                 df_loc[
-                    [
-                        "date",
-                        "site",
-                        "latitude",
-                        "longitude",
-                        "elevation",
-                        "depthOfTemperatureObservation",
-                        "temperatureObserved",
-                        "reference",
-                        "reference_short",
-                        "note",
-                        "error",
-                        "durationOpen",
-                        "durationMeasured",
-                        "method",
-                    ]
+                    [ "date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
                 ],
-                ignore_index=True,
+                ), ignore_index=True,
             )
 
 df_m.to_csv("output/10m_temperature_dataset_monthly.csv", index=False)
