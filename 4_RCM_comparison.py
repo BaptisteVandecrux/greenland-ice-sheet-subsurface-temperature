@@ -52,6 +52,15 @@ years = pd.DatetimeIndex(dates).year.unique().values
 years.sort()
 df = df.reset_index(drop=True)
 
+ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
+land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
+DSA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/DSA_MAR_4326.shp")
+LAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/LAPA_MAR_4326.shp")
+HAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/HAPA_MAR_4326.shp")
+firn = gpd.GeoDataFrame.from_file(
+    "Data/misc/firn areas/FirnLayer2000-2017_final_4326.shp"
+)
+
 # Loading RCM and reprojecting them
 crs_racmo_proj = (
     "-m 57.295779506 +proj=ob_tran +o_proj=latlon +o_lat_p=18.0 +lon_0=-37.5 +o_lon_p=0"
@@ -79,10 +88,14 @@ ds_racmo = ds_racmo.rio.write_crs(crs_racmo).drop_vars(["lat", "lon"])
 
 print("loading MAR")
 ds_mar = xr.open_dataset( "Data/RCM/MARv3.12.1_2022_T10m_ME_1980-2021.nc" )
+ds_mar_msk = xr.open_dataset( "Data/RCM/MARv3.12.0.4-ERA5-20km-1980.nc" )['MSK']
+ds_mar = ds_mar.where(ds_mar_msk>50)
 ds_mar = ds_mar.rename({"X10_85": "x", "Y20_155": "y", 'TIME':'time'}).drop_vars(["LAT", "LON"])
 crs_mar_proj = "+proj=stere +lat_0=90 +lat_ts=70 +lon_0=-45 +x_0=0 +y_0=0 +datum=WGS84 +units=km +no_defs"
 crs_mar = CRS.from_string(crs_mar_proj)
 ds_mar = ds_mar.rio.write_crs(crs_mar)
+land_mar = land.to_crs(ds_mar.rio.crs)
+ds_mar = ds_mar.rio.clip(land_mar.geometry.values, ds_mar.rio.crs)
 # ds_mar = ds_mar.rio.reproject(target_crs)
 
 print("loading HIRHAM")
@@ -115,6 +128,8 @@ crs_ann = CRS.from_string("EPSG:4326")
 ds_ann = ds_ann.rio.write_crs(crs_ann)
 # ds_ann = ds_ann.rio.reproject(target_crs)
 
+
+# %% Extracting model values at observation sites
 # finding observation coordinate in RACMO's CRS
 df.date = pd.to_datetime(df.date)
 df["x"], df["y"] = transform(
@@ -150,7 +165,7 @@ def extract_T10m_values(ds, df, dim1="x", dim2="y", name_out="out"):
     except:
         ds_interp_2 = ds.interp(longitude=x, latitude=y, method="nearest")
 
-    for i in progressbar(range(df.shape[0])):
+    for i in (range(df.shape[0])):
         query_point = (df[dim1].values[i], df[dim2].values[i])
         index_point = np.where((coords_uni == query_point).all(axis=1))[0][0]
         tmp = ds_interp.T10m.isel(points=index_point).sel(
@@ -186,14 +201,6 @@ df = extract_T10m_values(
 
 df_save = df.copy()
 
-ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
-land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
-DSA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/DSA_MAR_4326.shp")
-LAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/LAPA_MAR_4326.shp")
-HAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/HAPA_MAR_4326.shp")
-firn = gpd.GeoDataFrame.from_file(
-    "Data/misc/firn areas/FirnLayer2000-2017_final_4326.shp"
-)
 # %% Plotting RCM performance
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
 df_10m = df_10m.reset_index()
@@ -201,27 +208,22 @@ df_10m = df_10m.sort_values("year")
 ref_list = df_10m["reference_short"].unique()
 df_10m["ref_id"] = [np.where(ref_list == x)[0] for x in df_10m["reference"]]
 
-matplotlib.rcParams.update({"font.size": 9})
+matplotlib.rcParams.update({"font.size": 14})
 from matplotlib import cm
 from matplotlib.colors import Normalize
 from scipy.interpolate import interpn
 import matplotlib.patheffects as pe
 from matplotlib import patches as mpatches
 
-fig, ax = plt.subplots(2, 2, figsize=(9, 15))
-ax = ax.flatten()
-plt.subplots_adjust(left=0.09, bottom=0.08, right=0.97, top=0.6, wspace=0.2, hspace=0.2)
-cmap = matplotlib.cm.get_cmap("tab20b")
-version = ["", "v3.12", "2.3p2", "5"]
-sym = ["o", "^", "v", "d"]
-
-ax_map = fig.add_axes([0.01, 0.6, 0.8, 0.4])
+fig, ax_map = plt.subplots(1,1, figsize=(9, 10))
+# ax_map = fig.add_axes([0.01, 0.6, 0.8, 0.4])
+plt.subplots_adjust(left=0.01, bottom=0.1, right=0.7, top=0.95)
 land.to_crs("EPSG:3413").plot(ax=ax_map, color="k")
 ice.to_crs("EPSG:3413").plot(ax=ax_map, color="gray")
 DSA.to_crs("EPSG:3413").plot(ax=ax_map, color="tab:blue")
 LAPA.to_crs("EPSG:3413").plot(ax=ax_map, color="m")
 HAPA.to_crs("EPSG:3413").plot(ax=ax_map, color="tab:red")
-plt.annotate("A.", (0.01, 0.9), fontsize=12, xycoords="axes fraction")
+# plt.annotate("A.", (0.01, 0.9), fontsize=12, xycoords="axes fraction")
 
 ax_map.axis("off")
 h = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
@@ -242,24 +244,26 @@ h[5] = plt.plot(
 )[0]
 
 ax_map.legend(
-    handles=h, bbox_to_anchor=(1.1, 0.5), loc="lower left", fontsize=11, frameon=False
+    handles=h, bbox_to_anchor=(1.1, 0.5), loc="lower left", fontsize=14, frameon=False
 )
-ax_map.set_title("A. Ice sheet areas")
+# ax_map.set_title("A. Ice sheet areas")
 
-hb = ax_map.hexbin(
-    df.x_3413,
-    df.y_3413,
-    bins="log",
-    gridsize=(20, 26),
-    mincnt=1,
-    linewidth=0.5,
-    edgecolors="white",
-    cmap="magma",
-)
-cbar_ax = fig.add_axes([0.64, 0.79, 0.1, 0.01])
+hb = ax_map.hexbin(df.x_3413, df.y_3413,
+    bins="log", gridsize=(20, 26), mincnt=1,
+    linewidth=0.5, edgecolors="white", cmap="magma")
+cbar_ax = fig.add_axes([0.75, 0.5, 0.1, 0.01])
 cb = plt.colorbar(hb, ax=ax_map, cax=cbar_ax, orientation="horizontal")
 cb.ax.get_yaxis().fontsize = 12
 cb.set_label("Number of monthly \n$T_{10m}$ observations", fontsize=12, rotation=0)
+fig.savefig('figures/map.png',dpi=300)
+
+# %%
+fig, ax = plt.subplots(2, 2, figsize=(14, 10))
+ax = ax.flatten()
+plt.subplots_adjust(left=0.1, bottom=0.1, right=0.97, top=0.95, wspace=0.2, hspace=0.2)
+cmap = matplotlib.cm.get_cmap("tab20b")
+version = ["", "v3.12", "2.3p2", "5"]
+sym = ["o", "^", "v", "d"]
 
 model_list = ["ANN", "RACMO", "HIRHAM", "MAR"]
 for i, model in enumerate(model_list):
@@ -309,16 +313,11 @@ for i, model in enumerate(model_list):
                 ),
             )
         )
-    ax[i].text(
-        0.02,
-        0.95,
-        "All sites\n" + textstr,
-        transform=ax[i].transAxes,
-        fontsize=11,
-        verticalalignment="top",
-    )
+    t1 = ax[i].text(0.02, 0.95, "All sites\n" + textstr,
+        transform=ax[i].transAxes, fontsize=16, verticalalignment="top")
+    t1.set_bbox(dict(facecolor='w', alpha=0.5, edgecolor='w'))
 
-    ax[i].set_title(ABC[i + 1] + ". " + model, loc="left")
+    ax[i].set_title(ABC[i] + ". " + model, loc="left")
     ax[i].plot([-35, 2], [-35, 2], c="black")
     ax[i].set_xlim(-35, 2)
     ax[i].set_ylim(-35, 2)
@@ -354,47 +353,25 @@ for i, model in enumerate(model_list):
         # markeredgecolor="lightgray",
         markeredgewidth=0.5,
         markersize=5,
-        color="gray",
+        color="tab:red",
     )
     RMSE = np.sqrt(np.mean((df_10m["T10m_" + model] - df_10m.temperatureObserved) ** 2))
     ME = np.mean(df_10m["T10m_" + model] - df_10m.temperatureObserved)
 
-    textstr = "\n".join(
-        (
-            r"$MD=%.2f ^o$C " % (ME,),
-            r"$RMSD=%.2f ^o$C" % (RMSE,),
-            r"$N=%.0f$" % (np.sum(~np.isnan(df_10m["T10m_" + model])),),
-        )
-    )
+    textstr = "\n".join((r"$MD=%.2f ^o$C " % (ME,),
+                         r"$RMSD=%.2f ^o$C" % (RMSE,),
+                         r"$N=%.0f$" % (np.sum(~np.isnan(df_10m["T10m_" + model]))),
+                         ))
+    t = ax[i].text(0.55, 0.3, "Ablation sites\n" + textstr, transform=ax[i].transAxes,
+        fontsize=16, verticalalignment="top", color="tab:red")
+    t.set_bbox(dict(facecolor='w', alpha=0.5, edgecolor='w'))
+    ax[i].tick_params(axis='both', which='major', labelsize=16)
 
-    ax[i].text(
-        0.64,
-        0.3,
-        "Ablation sites\n" + textstr,
-        transform=ax[i].transAxes,
-        fontsize=11,
-        verticalalignment="top",
-        color="gray",
-    )
-
-fig.text(
-    0.5,
-    0.02,
-    "Simulated 10 m subsurface temperature ($^o$C)",
-    ha="center",
-    va="center",
-    fontsize=12,
-)
-fig.text(
-    0.03,
-    0.35,
-    "Observed 10 m subsurface temperature ($^o$C)",
-    ha="center",
-    va="center",
-    rotation="vertical",
-    fontsize=12,
-)
-fig.savefig("figures/model_comp_all_no_legend.png")
+fig.text(0.5,  0.02,  "Simulated 10 m subsurface temperature ($^o$C)",
+    ha="center", va="center", fontsize=16)
+fig.text(0.03, 0.5, "Observed 10 m subsurface temperature ($^o$C)",
+    ha="center", va="center", rotation="vertical", fontsize=16)
+fig.savefig("figures/model_comp_all_no_legend.png", dpi = 300)
 
 # %% Plotting at selected sites
 from math import sin, cos, sqrt, atan2, radians
@@ -424,7 +401,7 @@ site_list = pd.DataFrame(
             ["CP1", "1955", "2021", 69.91666666666667, -46.93333333333333, 2012.0],
             ["DYE-2", "1964", "2019", 66.46166666666667, -46.23333333333333, 2100.0],
             ["Camp Century", "1954", "2019", 77.21833333333333, -61.025, 1834.0],
-            ["SwissCamp", "1990", "2005", 69.57, -49.3, 1174.0],
+            ["Swiss Camp", "1990", "2005", 69.57, -49.3, 1174.0],
             ["Summit", "1997", "2018", 72.5667, -38.5, 3248.0],
             ["KAN-U", "2011", "2019", 67.0003, -47.0253, 1840.0],
             ["NASA-SE", "1998", "2021", 66.47776999999999, -42.493634, 2385.0],
@@ -479,8 +456,8 @@ for i, site in enumerate(site_list.index):
         df_select.temperatureObserved,
         ".",
         markersize=9,
-        color="darkgray",
-        markeredgecolor="lightgray",
+        color="k",
+        markeredgecolor="k",
         linestyle="None",
         label="observations",
     )
@@ -614,7 +591,6 @@ ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
 ice = ice.to_crs("EPSG:3413")
 ice_4326 = ice.to_crs("EPSG:4326")
 
-
 # RACMO
 # if 'ds_racmo_3413' not in locals():
 #     ds_racmo_3413 = ds_racmo.rio.reproject("EPSG:3413")
@@ -630,12 +606,13 @@ ds_hh_GrIS = (ds_hh.mean(dim=("x", "y"))).to_pandas().T10m - 273.15
 # ds_hh.to_netcdf('HIRHAM_T10m.nc')
 # if 'ds_mar_3413' not in locals():
 #     ds_mar_3413 = ds_mar.rio.reproject("EPSG:3413")
-ds_mar = ds_mar.rio.clip(ice.to_crs(ds_mar.rio.crs).geometry.values, ds_mar.rio.crs)
+# ds_mar = ds_mar.rio.clip(ice.to_crs(ds_mar.rio.crs).geometry.values, ds_mar.rio.crs)
+
 ds_mar["T10m"] = ds_mar.T10m.where(ds_mar.T10m > -200)
 ds_mar_GrIS = (ds_mar.mean(dim=("x", "y"))).to_pandas().T10m
+
 if "ds_ann_3413" not in locals():
     ds_ann_3413 = ds_ann.rio.reproject("EPSG:3413")
-
 ds_ann = ds_ann.rio.clip(ice_4326.geometry.values, ice_4326.crs)
 ds_ann_3413 = ds_ann_3413.rio.clip(ice.geometry.values, ice.crs)
 # ds_ann_3413_2 = ds_ann_3413.rio.clip(ice.geometry.values, ice.crs, all_touched=True)
@@ -814,12 +791,12 @@ for i in range(3):
         cb.ax.get_yaxis().labelpad = 18
         cb.set_label(
             "Trend in 10 m subsurface temperature ($^o$C decade $^{-1}$)",
-            fontsize=12,
+            fontsize=14,
             rotation=270,
         )
     ax[i].set_axis_off()
     ax[i].set_title(
-        ABC[i + 1] + ". ANN, " + str(year_start) + " to " + str(year_end),
+        ABC[i ] + ". ANN, " + str(year_start) + " to " + str(year_end),
         fontweight="bold",
     )
 
@@ -940,7 +917,7 @@ for k in range(len(ds_T10m_l)):
     ax[k + 3].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
     ax[k + 3].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
     ax[k + 3].set_title(
-        ABC[k + 4] + ". " + model + ", 1980 to 2016", fontsize=12, fontweight="bold"
+        ABC[k + 3] + ". " + model + ", 1980 to 2016", fontsize=12, fontweight="bold"
     )
     # calculating trend on entire period
     X = np.array([toYearFraction(d) for d in T10m_GrIS.loc[T10m_GrIS.notnull()].index])
@@ -968,8 +945,6 @@ ax_bot.legend(ncol=4, loc="upper right", fontsize=12, bbox_to_anchor=(1, 1.35))
 fig.savefig("figures/all_RCMs_trend_map.png", dpi=300)
 
 # %% Firn area averages analysis
-
-
 def selected_area(ds, shape, mask=0):
     ds_select = ds.rio.clip(
         shape.to_crs(ds.rio.crs).geometry.values, ds.rio.crs, all_touched=True
@@ -987,22 +962,25 @@ def selected_area(ds, shape, mask=0):
         tmp = (tmp_w.mean(dim=("latitude", "longitude"))).to_pandas().T10m
     return tmp.resample("Y").mean()
 
-
+print('clipping ANN')
 ds_ann_DSA = selected_area(ds_ann, DSA)
 ds_ann_LAPA = selected_area(ds_ann, LAPA)
 ds_ann_HAPA = selected_area(ds_ann, HAPA)
 ds_ann_BIA = selected_area(ds_ann, firn, mask=1)
 
+print('clipping RACMO')
 ds_racmo_DSA = selected_area(ds_racmo, DSA) - 273.15
 ds_racmo_LAPA = selected_area(ds_racmo, LAPA) - 273.15
 ds_racmo_HAPA = selected_area(ds_racmo, HAPA) - 273.15
 ds_racmo_BIA = selected_area(ds_racmo, firn, mask=1) - 273.15
 
+print('clipping MAR')
 ds_mar_DSA = selected_area(ds_mar, DSA)
 ds_mar_LAPA = selected_area(ds_mar, LAPA)
 ds_mar_HAPA = selected_area(ds_mar, HAPA)
 ds_mar_BIA = selected_area(ds_mar, firn, mask=1)
 
+print('clipping HIRHAM')
 ds_hh_DSA = selected_area(ds_hh, DSA) - 273.15
 ds_hh_LAPA = selected_area(ds_hh, LAPA) - 273.15
 ds_hh_HAPA = selected_area(ds_hh, HAPA) - 273.15
@@ -1022,6 +1000,8 @@ ds_hh_BIA = selected_area(ds_hh, firn, mask=1) - 273.15
 #     ax[i-1].axes.get_xaxis().set_visible(False)
 #     ax[i-1].axes.get_yaxis().set_visible(False)
 #%% Plotting for different firn areas
+import statsmodels.api as sm
+
 CB_color_cycle = [
     "#377eb8",
     "#ff7f00",
@@ -1035,7 +1015,7 @@ CB_color_cycle = [
 ]
 
 
-def plot_selected_ds(tmp, ax, label, mask=0):
+def plot_selected_ds(tmp_in, ax, label, mask=0):
     if label == "ANN":
         col = CB_color_cycle[0]
     elif label == "RACMO":
@@ -1048,7 +1028,7 @@ def plot_selected_ds(tmp, ax, label, mask=0):
         col = CB_color_cycle[4]
 
     # tmp.plot(ax=ax, color='black', label='_no_legend_',alpha=0.3)
-    tmp = tmp.resample("Y").mean()
+    tmp = tmp_in.resample("Y").mean()
     tmp.plot(
         ax=ax, label=label, drawstyle="steps-post", linewidth=3, color=col, alpha=0.8
     )
@@ -1067,63 +1047,71 @@ def plot_selected_ds(tmp, ax, label, mask=0):
     est2 = est.fit()
 
     print(
-        "%s, %i-%i, %0.3f, %0.3f"
-        % (label, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1])
+        "%s, %i-%i, %0.3f, %0.3f, %0.3f"
+        % (label,  X[0], X[-1], tmp_in.loc['1980':'2016'].mean(), est2.params[1] * 10, est2.pvalues[1])
     )
 
-
-fig, ax = plt.subplots(4, 1, figsize=(8, 10))
-fig.subplots_adjust(left=0.1, right=0.98, top=0.93, bottom=0.07, hspace=0.25)
+print('Model, period, mean T10m, slope of T10m (K decade-1), pvalue')
+fig, ax = plt.subplots(5, 1, figsize=(8, 12))
+fig.subplots_adjust(left=0.15, right=0.98, top=0.93, bottom=0.07, hspace=0.35)
 ax = ax.flatten()
-print("bare ice")
-plot_selected_ds(ds_ann_BIA, ax[0], "ANN")
-plot_selected_ds(ds_racmo_BIA, ax[0], "RACMO")
-plot_selected_ds(ds_hh_BIA, ax[0], "HIRHAM")
-plot_selected_ds(ds_mar_BIA, ax[0], "MAR")
+print("all GrIS")
+plot_selected_ds(ds_ann_GrIS, ax[0], "ANN")
+plot_selected_ds(ds_racmo_GrIS, ax[0], "RACMO")
+plot_selected_ds(ds_hh_GrIS, ax[0], "HIRHAM")
+plot_selected_ds(ds_mar_GrIS, ax[0], "MAR")
 # plot_selected_ds(ds_era, firn,ax[0], 'ERA5 $T_{2m}$')
-ax[0].set_title("A. Bare ice area", loc="left")
-ax[0].legend(ncol=4, bbox_to_anchor=(1, 1.05), loc="lower right", fontsize=11)
+ax[0].set_title("A. Greenland ice sheet", loc="left", fontsize=14)
+ax[0].legend(ncol=4, bbox_to_anchor=(1, 1.15), loc="lower right", fontsize=14)
+print("bare ice")
+plot_selected_ds(ds_ann_BIA, ax[1], "ANN")
+plot_selected_ds(ds_racmo_BIA, ax[1], "RACMO")
+plot_selected_ds(ds_hh_BIA, ax[1], "HIRHAM")
+plot_selected_ds(ds_mar_BIA, ax[1], "MAR")
+# plot_selected_ds(ds_era, firn,ax[0], 'ERA5 $T_{2m}$')
+ax[1].set_title("B. Bare ice area", loc="left", fontsize=14)
 print("DSA")
-plot_selected_ds(ds_ann_DSA, ax[1], "ANN")
-plot_selected_ds(ds_racmo_DSA, ax[1], "RACMO")
-plot_selected_ds(ds_hh_DSA, ax[1], "HIRHAM")
-plot_selected_ds(ds_mar_DSA, ax[1], "MAR")
-# plot_selected_ds(ds_era_DSA, ax[1], 'ERA5 $T_{2m}$')
-ax[1].set_title("B. Dry snow area", loc="left")
+plot_selected_ds(ds_ann_DSA, ax[2], "ANN")
+plot_selected_ds(ds_racmo_DSA, ax[2], "RACMO")
+plot_selected_ds(ds_hh_DSA, ax[2], "HIRHAM")
+plot_selected_ds(ds_mar_DSA, ax[2], "MAR")
+# plot_selected_ds(ds_era_DSA, ax[2], 'ERA5 $T_{2m}$')
+ax[2].set_title("C. Dry snow area", loc="left", fontsize=14)
 print("LAPA")
-plot_selected_ds(ds_ann_LAPA, ax[2], "ANN")
-plot_selected_ds(ds_racmo_LAPA, ax[2], "RACMO")
-plot_selected_ds(ds_hh_LAPA, ax[2], "HIRHAM")
-plot_selected_ds(ds_mar_LAPA, ax[2], "MAR")
-# plot_selected_ds(ds_era_LAPA, ax[2], 'ERA5 $T_{2m}$')
-ax[2].set_title("C. Low accumulation percolation area", loc="left")
+plot_selected_ds(ds_ann_LAPA, ax[3], "ANN")
+plot_selected_ds(ds_racmo_LAPA, ax[3], "RACMO")
+plot_selected_ds(ds_hh_LAPA, ax[3], "HIRHAM")
+plot_selected_ds(ds_mar_LAPA, ax[3], "MAR")
+# plot_selected_ds(ds_era_LAPA, ax[3], 'ERA5 $T_{2m}$')
+ax[3].set_title("D. Low accumulation percolation area", loc="left", fontsize=14)
 print("HAPA")
-plot_selected_ds(ds_ann_HAPA, ax[3], "ANN")
-plot_selected_ds(ds_racmo_HAPA, ax[3], "RACMO")
-plot_selected_ds(ds_hh_HAPA, ax[3], "HIRHAM")
-plot_selected_ds(ds_mar_HAPA, ax[3], "MAR")
+plot_selected_ds(ds_ann_HAPA, ax[4], "ANN")
+plot_selected_ds(ds_racmo_HAPA, ax[4], "RACMO")
+plot_selected_ds(ds_hh_HAPA, ax[4], "HIRHAM")
+plot_selected_ds(ds_mar_HAPA, ax[4], "MAR")
 # plot_selected_ds(ds_era, HAPA, ax[3], 'ERA5 $T_{2m}$')
-ax[3].set_title("D. High accumulation percolation area", loc="left")
+ax[4].set_title("E. High accumulation percolation area", loc="left", fontsize=14)
 
-ax[0].set_ylim(-16, -16 + 10)
-ax[1].set_ylim(-29, -29 + 10)
-ax[2].set_ylim(-18, -18 + 10)
-ax[3].set_ylim(-15, -15 + 10)
-for i in range(4):
+ax[0].set_ylim(-25, -25 + 10)
+ax[1].set_ylim(-16, -16 + 10)
+ax[2].set_ylim(-29, -29 + 10)
+ax[3].set_ylim(-18, -18 + 10)
+ax[4].set_ylim(-15, -15 + 10)
+for i in range(5):
     ax[i].set_xlim(pd.to_datetime("1954"), pd.to_datetime("2021"))
-    ax[i].tick_params(axis="y", labelsize=10.5)
+    ax[i].tick_params(axis="both", labelsize=14)
     ax[i].grid()
 
-    if i < 3:
+    if (i < 4) & (i >0):
         ax[i].axes.xaxis.set_ticklabels([])
         ax[i].set_xlabel("")
     else:
-        ax[i].set_xlabel("Year", fontsize=11)
+        ax[i].set_xlabel("Year", fontsize=14)
 fig.text(
     0.01,
     0.5,
     "Average 10 m subsurface temperature ($^o$C)",
-    fontsize=12,
+    fontsize=14,
     va="center",
     rotation="vertical",
 )
@@ -1140,23 +1128,30 @@ ds_era = (
     .rio.clip(ice.geometry.values, ice.crs)
     .rio.reproject("EPSG:3413")
 )
-ds_era = ds_era.sel(time=slice("1985-01-01", "2021-12-31"))
 ds_era = ds_era.interp(x=ds_ann_3413["x"], y=ds_ann_3413["y"])
+ds_era = xr.where(ds_era.t2m<1000,ds_era,np.nan)
+
+ds_era_5y = ds_era.rolling(time=5, center=False).mean() - 273.15
+ds_ann_y = ds_ann_3413.resample(time='Y').mean()
 
 ds_era_dy = ds_era.copy()
 ds_era_dy["time"] = [toYearFraction(d) for d in pd.to_datetime(ds_era_dy.time.values)]
-_, _, slope_era, _, pval_era, _ = linregress_3D(ds_era_dy.time, ds_era_dy.t2m)
-_, _, slope_sf, _, pval_sf, _ = linregress_3D(ds_era_dy.time, ds_era_dy.sf)
+_, _, slope_era, _, pval_era, _ = linregress_3D(
+    ds_era_dy.sel(time=slice("1985-01-01", "2022-12-31")).time, 
+    ds_era_dy.t2m.sel(time=slice("1985-01-01", "2022-12-31"))
+    )
+_, _, slope_sf, _, pval_sf, _ = linregress_3D(
+    ds_era_dy.sel(time=slice("1985-01-01", "2022-12-31")).time, 
+    ds_era_dy.sf.sel(time=slice("1985-01-01", "2022-12-31")))
 
-ds_ann_dy = (
-    ds_ann_3413.resample(time="Y")
-    .mean()
-    .sel(time=slice("1985-01-01", "2021-12-31"))
-    .copy()
-)
+ds_ann_dy = ds_ann_3413.resample(time="Y").mean().copy()
+
 ds_ann_dy["time"] = [toYearFraction(d) for d in pd.to_datetime(ds_ann_dy.time.values)]
 
-_, _, slope_ann, _, pval_ann, _ = linregress_3D(ds_ann_dy.time, ds_ann_dy.T10m)
+_, _, slope_ann, _, pval_ann, _ = linregress_3D(
+    ds_ann_dy.sel(time=slice("1985-01-01", "2022-12-31")).time, 
+    ds_ann_dy.T10m.sel(time=slice("1985-01-01", "2022-12-31"))
+    )
 
 labels = [
     "A. 1985-2021 trend in 2m \nair temperature",
@@ -1170,9 +1165,9 @@ units = [
     "$^o$C decade$^{-1}$",
     "$^o$C decade$^{-1}$",
 ]
-
-fig, ax = plt.subplots(2, 2, sharex=True, sharey=True, figsize=(10, 12))
-ax = ax.flatten()
+#%% plotting
+fig, ax = plt.subplots(1, 4, sharex=True, sharey=True, figsize=(20, 6))
+# ax = ax.flatten()
 vmin = -1.5
 vmax = 1.5
 (slope_era * 10).plot(
@@ -1180,12 +1175,9 @@ vmax = 1.5
 )
 X, Y = np.meshgrid(slope_era.x, slope_era.y)
 ax[0].hexbin(
-    X.reshape(-1),
-    Y.reshape(-1),
+    X.reshape(-1), Y.reshape(-1),
     slope_era.where(pval_era > 0.05).data[:, :].reshape(-1),
-    gridsize=(50, 50),
-    hatch="..",
-    alpha=0,
+    gridsize=(50, 50), hatch="..", alpha=0,
 )
 
 (slope_ann * 10).plot(
@@ -1223,30 +1215,125 @@ for i in range(4):
     ax[i].axes.xaxis.set_ticklabels([])
     ax[i].axes.yaxis.set_ticklabels([])
     land.plot(ax=ax[i], zorder=0, color="black")
+    ax[i].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
+    ax[i].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
     ax[i].set_xlabel("")
     ax[i].set_ylabel("")
+    
+fig.savefig('figures/comparison_ANN_ERA5.png',dpi=300)
 
 # %% T2m vs T10m difference
-x = ds_era_dy.t2m.values.flatten()
-y = ds_ann_dy.T10m.values.flatten()
+plt.close('all')
+fig,ax = plt.subplots(1,4, figsize=(14,4))
+ax = ax.reshape(1,-1)
+plt.subplots_adjust(left=0.01, right=0.9, top =0.9, wspace=0.5)
+for i, y in enumerate(['2012']):
+    ds_era_5y.sel(time=y).t2m.plot(ax=ax[i, 0], vmin=-30, vmax=10, cmap='coolwarm',
+                                   cbar_kwargs={'label': '5 year mean $T_{2m}$ from ERA5 ($^o$C)'})
+    ds_ann_y.sel(time=y).T10m.plot(ax=ax[i, 1], vmin=-30, vmax=10, cmap='coolwarm',
+                                   cbar_kwargs={'label': 'mean $T_{10m}$ from ANN ($^o$C)'})
+    (ds_era_5y.sel(time=y).t2m - ds_ann_y.sel(time=y).T10m.interp_like(
+        ds_era_5y.isel(time=0).t2m)
+        ).plot(ax=ax[i, 2],
+               vmin=-10, vmax=10,
+               cmap='seismic',
+               cbar_kwargs = {'label':'Difference between $T_{2m}$ and $T_{10m}$'})
+    ax[i, 3].plot( ds_era_5y.sel(time=y).t2m.values.flatten(), 
+                   (ds_era_5y.sel(time=y).t2m - ds_ann_y.sel(time=y).T10m.interp_like(
+                       ds_era_5y.isel(time=0).t2m)
+                       ).values.flatten(),
+                   marker='.', markersize=0.5, linestyle='None')
 
-ind = ~np.isnan(x + y)
-x = x[ind]
-y = y[ind]
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import gaussian_kde
+    ax[i, 3].yaxis.tick_right()
+    ax[i, 3].yaxis.set_label_position("right")
+    ax[i, 3].set_xlabel('ERA5 5 year mean T2m ($^oC$)')
+    ax[i, 3].set_ylabel('Diff. between 5 year mean T2m\n and T10m ($^oC$)')
+    ax[i, 3].grid()
+    for k in range(3):
+        ax[i, k].set_title('')
+        ax[i, k].axes.xaxis.set_ticklabels([])
+        ax[i, k].axes.yaxis.set_ticklabels([])
+        land.plot(ax=ax[i, k], zorder=0, color="black")
+        ax[i, k].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
+        ax[i, k].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
+        ax[i, k].set_xlabel("")
+        ax[i, k].set_ylabel("")
+fig.savefig('figures/t2m_T10m_diff.png', dpi=300)
+# %% Comparison of mean avg T10m (in EPSG:3413)
+fig, ax= plt.subplots(1,3,figsize=(18,8))
 
-nbins = 300
-k = gaussian_kde([x, y])
-xi, yi = np.mgrid[x.min() : x.max() : nbins * 1j, y.min() : y.max() : nbins * 1j]
-zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+tmp=ds_racmo.T10m.sel(time=slice('1980','2016')).mean(dim='time').rio.reproject(3413)
+tmp = tmp.where(tmp<=273.15)
+tmp = (-ds_ann_3413.T10m.sel(time=slice('1980','2016')).mean(dim='time') -273.15 + tmp.interp_like(ds_ann_3413.T10m.isel(time=0)))
+tmp.plot(vmin=-15, vmax=15, cmap = 'seismic',ax=ax[0], add_colorbar=False)
+ax[0].set_title('RACMO - ANN')
+print(tmp.mean().values)
 
-# Make the plot
-plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading="auto")
-plt.show()
+tmp = ds_mar.T10m.sel(time=slice('1980','2016')).mean(dim='time').rio.reproject(3413)
+tmp = tmp.where(tmp<=0)
+tmp=(-ds_ann_3413.T10m.sel(time=slice('1980','2016')).mean(dim='time') + tmp.interp_like(ds_ann_3413.T10m.isel(time=0)))
+tmp.plot(vmin=-15, vmax=15, cmap = 'seismic',ax=ax[1], add_colorbar=False)
+ax[1].set_title('MAR - ANN')
+print(tmp.mean().values)
 
-# Change color palette
-plt.pcolormesh(xi, yi, zi.reshape(xi.shape), shading="auto", cmap=plt.cm.Greens_r)
-plt.colorbar()
-plt.show()
+tmp =ds_hh.T10m.sel(time=slice('1980','2016')).mean(dim='time').rio.reproject(3413)
+tmp = tmp.where(tmp<=273.15)
+tmp=(-ds_ann_3413.T10m.sel(time=slice('1980','2016')).mean(dim='time') -273.15 + tmp.interp_like(ds_ann_3413.T10m.isel(time=0)))
+tmp.plot(vmin=-15, vmax=15, cmap = 'seismic',ax=ax[2], cbar_kwargs={'label': '1980-2016 mean T10m difference'})
+ax[2].set_title('HIRHAM - ANN')
+print(tmp.mean().values)
+
+for ax in ax:
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+    ax.axes.get_xaxis().set_ticks([])
+    ax.axes.get_yaxis().set_ticks([])
+    land.plot(ax=ax, zorder=-1, color='k')
+    ax.set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
+    ax.set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
+fig.savefig('figures/comp_T10m_avg.png')
+
+# %% Comparison of mean avg T10m (in RCM CRS)
+fig, ax= plt.subplots(1,3,figsize=(18,8))
+
+print(ds_ann.T10m.sel(time=slice('1980','2016')).mean(dim='time').mean().values)
+
+print(ds_ann_3413.T10m.sel(time=slice('1980','2016')).mean(dim='time').mean().values)
+
+print(ds_ann.T10m.sel(time=slice('1980','2016')).mean(dim='time').weighted(weights).mean().values)
+
+
+tmp=ds_racmo.T10m.sel(time=slice('1980','2016')).mean(dim='time')
+tmp_ann = ds_ann_3413.T10m.sel(time=slice('1980','2016')).mean(dim='time').rio.reproject(ds_racmo.rio.crs)
+tmp_ann = tmp_ann.where(tmp_ann<=0).interp_like(tmp)
+(-tmp_ann -273.15 + tmp).plot(vmin=-15, vmax=15, cmap = 'seismic',ax=ax[0], add_colorbar=False)
+ax[0].set_title('RACMO - ANN')
+print(tmp.mean().values-273.15,
+      tmp_ann.mean().values, 
+      tmp.mean().values-273.15-ds_ann.T10m.sel(time=slice('1980','2016')).mean(dim='time').weighted(weights).mean().values)
+
+tmp=ds_mar.T10m.sel(time=slice('1980','2016')).mean(dim='time')
+tmp_ann = ds_ann_3413.T10m.sel(time=slice('1980','2016')).mean(dim='time').rio.reproject(tmp.rio.crs)
+tmp_ann = tmp_ann.where(tmp_ann<=0).interp_like(tmp)
+(-tmp_ann + tmp).plot(vmin=-15, vmax=15, cmap = 'seismic',ax=ax[1], add_colorbar=False)
+ax[1].set_title('MAR - ANN')
+print(tmp.mean().values,
+      tmp_ann.mean().values,
+      tmp.mean().values-ds_ann.T10m.sel(time=slice('1980','2016')).mean(dim='time').weighted(weights).mean().values)
+
+tmp=ds_hh.T10m.sel(time=slice('1980','2016')).mean(dim='time')
+tmp_ann = ds_ann_3413.T10m.sel(time=slice('1980','2016')).mean(dim='time').rio.reproject(tmp.rio.crs)
+tmp_ann = tmp_ann.where(tmp_ann<=0).interp_like(tmp)
+(-tmp_ann -273.15 + tmp).plot(vmin=-15, vmax=15, cmap = 'seismic',ax=ax[2], label='1980-2016 mean T10m difference')
+ax[2].set_title('HIRHAM - ANN')
+print(tmp.mean().values-273.15,
+      tmp_ann.mean().values, 
+      tmp.mean().values-273.15-ds_ann.T10m.sel(time=slice('1980','2016')).mean(dim='time').weighted(weights).mean().values)
+
+for ax in ax:
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+    ax.axes.get_xaxis().set_ticks([])
+    ax.axes.get_yaxis().set_ticks([])
+    land.plot(ax=ax, zorder=-1, color='k')
+fig.savefig('figures/comp_T10m_avg_2.png')

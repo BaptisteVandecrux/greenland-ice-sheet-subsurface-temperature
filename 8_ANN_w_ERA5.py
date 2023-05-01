@@ -14,59 +14,67 @@ import geopandas as gpd
 import xarray as xr
 from scipy.spatial.distance import cdist
 import rasterio as rio
+import dask
+import progressbar
+bar = progressbar.ProgressBar()
 
 # import GIS_lib as gis
 from progressbar import progressbar
 import matplotlib
 
 df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
+df = df.loc[~pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :]
 
-# ============ To fix ================
-
-df_ambiguous_date = df.loc[pd.to_datetime(df.date, errors="coerce").isnull(), :]
-df = df.loc[~pd.to_datetime(df.date, errors="coerce").isnull(), :]
-
-df_bad_long = df.loc[df.longitude > 0, :]
-df["longitude"] = -df.longitude.abs().values
-
-df_no_coord = df.loc[np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
-df = df.loc[~np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
-
-df_invalid_depth = df.loc[
-    pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
-]
-df = df.loc[
-    ~pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
-]
-
-df_no_elev = df.loc[df.elevation.isnull(), :]
-df = df.loc[~df.elevation.isnull(), :]
-
-df_too_cold = df.loc[df.temperatureObserved<-42, :]
-df = df.loc[df.temperatureObserved>=-42, :]
 df['date'] = pd.to_datetime(df.date, utc=True).dt.tz_localize(None)
 df["year"] = pd.DatetimeIndex(df.date).year
+df.loc[df.site=='CEN1','site'] = 'Camp Century'  
+df.loc[df.site=='CEN2','site'] = 'Camp Century'   
+df.loc[df.site=='CEN','site'] = 'Camp Century'   
+
 
 land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
-
 ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
 ice = ice.to_crs("EPSG:3413")
-
 
 years = df["year"].values
 years.sort()
 df = df.reset_index(drop=True)
 
-# Extracting ERA5 data
+firn_memory = 4
+Predictors = (
+    ["t2m_amp", "t2m_avg", "sf_avg"]
+    + ["sf_" + str(i) for i in range(firn_memory)]
+    + ["t2m_" + str(i) for i in range(firn_memory)]
+)
 
-ds_era = xr.open_dataset("Data/ERA5/ERA5_monthly_temp_snowfall.nc")
-tmp2 = xr.open_dataset('Data/ERA5/m_era5_t2m_2016_2021.nc')
-tmp = xr.open_dataset('Data/ERA5/m_era5_t2m_2022.nc')
-tmp = tmp.isel(expver=0).combine_first(tmp.isel(expver=1))
-ds_era = xr.concat((ds_era,tmp), dim='time')
+# Extracting ERA5 data
+print('loading ERA5 data')
+with dask.config.set(**{'array.slicing.split_large_chunks': False}):
+    ds_era = xr.open_mfdataset(("Data/ERA5/ERA5_monthly_temp_snowfall.nc",
+                                'Data/ERA5/m_era5_t2m_sf_2022_proc.nc')).load()
+
+produce_input_grid = 0
+if produce_input_grid:
+    print('t2m_avg and sf_avg')
+    ds_era["t2m_avg"] = ds_era.t2m.rolling(time=firn_memory*12).mean()
+    ds_era["sf_avg"] = ds_era.sf.rolling(time=firn_memory*12).mean()
+    print('t2m_amp')
+    ds_era["t2m_amp"] = ds_era.t2m.rolling(time=12).max() - ds_era.t2m.rolling(time=12).min()
+    print('t2m_0 and sf_0')    
+    ds_era["t2m_0"] = ds_era.t2m.rolling(time=12).mean()
+    ds_era["sf_0"] = ds_era.sf.rolling(time=12).mean()
+    
+    for k in range(1, firn_memory):
+        print(k,'/',firn_memory-1)
+        ds_era["t2m_" + str(k)] = ds_era["t2m_0"].shift(time=12*k)
+        ds_era["sf_" + str(k)]  = ds_era["sf_0"].shift(time=12*k)
+
+    ds_era.to_netcdf("output/era5_monthly_plus_predictors.nc")
+
+else: 
+    ds_era = xr.open_dataset("output/era5_monthly_plus_predictors.nc")
 
 time_era = ds_era.time
-firn_memory = 4
 
 for i in range(firn_memory):
     df["t2m_" + str(i)] = np.nan
@@ -75,55 +83,27 @@ for i in range(firn_memory):
 df["time_era"] = np.nan
 df["t2m_amp"] = np.nan
 
-coords_uni = np.unique(df[["latitude", "longitude"]].values, axis=0)
+df = df.loc[(df.date>'1950') & (df.date<'2023'),:]
+
 print("interpolating ERA at the observation sites")
-x = xr.DataArray(coords_uni[:, 0], dims="points")
-y = xr.DataArray(coords_uni[:, 1], dims="points")
-ds_interp = ds_era.interp(latitude=x, longitude=y, method="linear")
+tmp = ds_era.interp(longitude = xr.DataArray(df.longitude, dims="points"), 
+                            latitude = xr.DataArray(df.latitude, dims="points"), 
+                            time = xr.DataArray(df.date, dims="points"), 
+                            method="nearest").load()
+df[Predictors] = tmp[Predictors].to_dataframe()[Predictors].values
 
-for i in (range(df.shape[0])):
-    query_point = (df.iloc[i, :].latitude, df.iloc[i, :].longitude)
-    index_point = np.where((coords_uni == query_point).all(axis=1))[0][0]
-    tmp = ds_interp.isel(points=index_point)
-    if (tmp.latitude.values, tmp.longitude.values) != query_point:
-        print(wtf)
-    for k in range(firn_memory):
-        if (
-            df.iloc[i, :].date + pd.DateOffset(years=0 - k)
-        ) < tmp.time.min().values:
-            continue
-        if (
-            df.iloc[i, :].date + pd.DateOffset(years=0 - k)
-        ) > tmp.time.max().values:
-            continue
-        time_end = tmp.sel(
-            time=df.iloc[i, :].date + pd.DateOffset(years=0 - k),
-            method="ffill",
-        ).time.values
-        time_start = tmp.sel(
-            time=df.iloc[i, :].date + pd.DateOffset(years=-1 - k) + pd.DateOffset(days=1),
-            method="bfill",
-        ).time.values
+df["date"] = pd.to_datetime(df.date)
+df["year"] = df["date"].dt.year
+df["month"] = (df["date"].dt.month - 1) / 12
 
-        if k == 0:
-            df.iloc[i, df.columns.get_loc("t2m_amp")] = (
-                tmp.sel(time=slice(time_start, time_end)).t2m.max().values
-                - tmp.sel(time=slice(time_start, time_end)).t2m.min().values
-            )
-        df.iloc[i, df.columns.get_loc("t2m_" + str(k))] = (
-            tmp.sel(time=slice(time_start, time_end)).t2m.mean().values
-        )
-        df.iloc[i, df.columns.get_loc("sf_" + str(k))] = (
-            tmp.sel(time=slice(time_start, time_end)).sf.sum().values
-        )
-        if k == 0:
-            df.iloc[i, df.columns.get_loc("time_era")] = (
-                tmp.sel(time=slice(time_start, time_end)).time.max().values
-            )
+df = df.loc[df.t2m_avg.notnull(), :]
+df = df.loc[df.sf_avg.notnull(), :]
+for i in range(firn_memory):
+    df = df.loc[df["sf_" + str(i)].notnull(), :]
+    df = df.loc[df["t2m_" + str(i)].notnull(), :]
 
-df["t2m_avg"] = df[["t2m_" + str(i) for i in range(firn_memory)]].mean(axis=1)
-df["sf_avg"] = df[["sf_" + str(i) for i in range(firn_memory)]].mean(axis=1)
 
+print('plotting')
 fig, ax = plt.subplots(2, 2, figsize=(13,13))
 ax = ax.flatten()
 ax[0].plot( df.t2m_0, df.temperatureObserved, 
@@ -140,77 +120,8 @@ ax[2].set_xlabel('t2m_avg')
 ax[3].set_xlabel('sf_avg')
 for i in range(4): ax[i].set_ylabel('temperatureObserved')
 
-df = df.loc[df.time_era.notnull(), :]
-df["date"] = pd.to_datetime(df.date)
-df["time_era"] = pd.to_datetime(df.time_era)
-df["year"] = df["date"].dt.year
-df["month"] = (df["date"].dt.month - 1) / 12
-
-df = df.loc[df.t2m_avg.notnull(), :]
-df = df.loc[df.sf_avg.notnull(), :]
-for i in range(firn_memory):
-    df = df.loc[df["sf_" + str(i)].notnull(), :]
-    df = df.loc[df["t2m_" + str(i)].notnull(), :]
-
-# % Producing or loading input grids:
-Predictors = (
-    ["t2m_amp", "t2m_avg", "sf_avg"]
-    + ["sf_" + str(i) for i in range(firn_memory)]
-    + ["t2m_" + str(i) for i in range(firn_memory)]
-)
-
-produce_input_grid = 0
-import progressbar
-if produce_input_grid:
-    print("Initializing array")
-    for pred in Predictors:
-        print(pred)
-        ds_era[pred] = ds_era.t2m * np.nan
-    for k in range(firn_memory):
-        ds_era["t2m_" + str(k)] = ds_era.t2m * np.nan
-    for k in range(firn_memory):
-        ds_era["sf_" + str(k)] = ds_era.t2m * np.nan
-    bar = progressbar.ProgressBar()
-    for time in bar(ds_era.time.to_dataframe().values):
-        for k in range(firn_memory):
-            time_end = (
-                pd.to_datetime(time)
-                + pd.DateOffset(years=0 - k)
-                + pd.DateOffset(days=-1)
-            )
-            time_start = pd.to_datetime(time) + pd.DateOffset(years=-1 - k)
-            tmp = ds_era.sel(time=slice(time_start.values[0], time_end.values[0]))
-            if tmp.t2m.shape[0] == 0:
-                continue
-            if tmp.time.shape[0] < 12:
-                continue
-            if k == 0:
-                ds_era["t2m_amp"].loc[dict(time=time)] = (
-                    tmp.t2m.max(dim="time").values - tmp.t2m.min(dim="time").values
-                )
-            ds_era["t2m_" + str(k)].loc[dict(time=time)] = tmp.t2m.mean(
-                dim="time"
-            ).values
-            ds_era["sf_" + str(k)].loc[dict(time=time)] = tmp.sf.sum(dim="time").values
-
-        ds_era["t2m_avg"].loc[dict(time=time)] = (
-            ds_era.sel(time=time)[["t2m_" + str(k) for k in range(firn_memory)]]
-            .to_array(dim="new")
-            .mean("new")
-            .values
-        )
-        ds_era["sf_avg"].loc[dict(time=time)] = (
-            ds_era.sel(time=time)[["sf_" + str(k) for k in range(firn_memory)]]
-            .to_array(dim="new")
-            .mean("new")
-            .values
-        )
-    ds_era.to_netcdf("output/era5_monthly_plus_predictors.nc")
-
-ds_era = xr.open_dataset("output/era5_monthly_plus_predictors.nc")
-
 # %% Representativity of the dataset
-
+print('calculating weights based on representativity')
 bins_temp = np.linspace(230, 275, 15)
 bins_sf = np.linspace(0, 0.15, 15)
 bins_amp = np.linspace(0, 50, 15)
@@ -237,7 +148,15 @@ for i in range(len(Predictors)):
     target_hist[i], _ = np.histogram(ds_era[Predictors[i]].values, bins=bins)
     target_hist[i] = target_hist[i].astype(np.float32) / target_hist[i].sum()
 
-# %%plotting (less slow)
+    hist1 = target_hist[i]
+    hist2, _ = np.histogram(df[Predictors[i]].values, bins=bins)
+    weights_bins = 0 * hist1
+    weights_bins[hist2 != 0] = hist1[hist2 != 0] / hist2[hist2 != 0]
+    ind = np.digitize(df[Predictors[i]].values, bins)
+    df[Predictors[i] + "_w"] = weights_bins[ind - 1]
+df["weights"] = df[[p + "_w" for p in Predictors]].mean(axis=1)
+
+# %% plotting histograms
 for k in range(2):
     fig, ax = plt.subplots(4, 3, figsize=(10, 8))
     fig.subplots_adjust(left=0.06, right=0.99, top=0.99, wspace=0.25, hspace=0.35)
@@ -314,7 +233,7 @@ for k in range(2):
         df["weights"] = df[[p + "_w" for p in Predictors]].mean(axis=1)
 
 
-# %% ANN
+# %% ANN functions
 # definition of the useful function to fit an ANN and run the trained model
 import os; os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from tensorflow.keras.models import Sequential
@@ -325,16 +244,8 @@ from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
 from sklearn.model_selection import GridSearchCV
 
 def train_ANN(df, Predictors, TargetVariable="temperatureObserved",
-              calc_weights=False, num_nodes = 40, num_layers = 2):
-    if calc_weights:
-        for i in range(len(Predictors)):
-            hist1 = target_hist[i]
-            hist2, _ = np.histogram(df[Predictors[i]].values, bins=bins)
-            weights_bins = 0 * hist1
-            weights_bins[hist2 != 0] = hist1[hist2 != 0] / hist2[hist2 != 0]
-            ind = np.digitize(df[Predictors[i]].values, bins)
-            df[Predictors[i] + "_w"] = weights_bins[ind - 1]
-        df["weights"] = df[[p + "_w" for p in Predictors]].mean(axis=1)
+              num_nodes = 32, num_layers = 2,
+              epochs = 1000):
 
     w = df["weights"].values
     X = df[Predictors].values
@@ -355,12 +266,12 @@ def train_ANN(df, Predictors, TargetVariable="temperatureObserved",
         model.add(Dense(units=num_nodes, activation="relu"))
     model.add(Dense(1))
     model.compile(loss="mean_squared_error", optimizer="adam")
-    model.fit(X, y, batch_size=200, epochs=1000, verbose=0, sample_weight=w)
+    model.fit(X, y, batch_size=200, epochs=epochs, verbose=0, sample_weight=w)
     return model, PredictorScalerFit, TargetVarScalerFit
 
-def ANN_model(df, model, PredictorScalerFit, TargetVarScalerFit):
+def ANN_predict(df, model, PredictorScalerFit, TargetVarScalerFit):
     X = PredictorScalerFit.transform(df.values)
-    Y = model.predict(X)
+    Y = model.predict(X, verbose=0)
     Predictions = pd.DataFrame(
         data=TargetVarScalerFit.inverse_transform(Y),
         index=df.index,
@@ -369,58 +280,78 @@ def ANN_model(df, model, PredictorScalerFit, TargetVarScalerFit):
     Predictions.loc[Predictions > 0] = 0
     return Predictions
 
-    
-Predictors = (
-    ["month", "t2m_amp", "t2m_avg", "sf_avg"]
-    + ["sf_" + str(i) for i in range(firn_memory)]
-    + ["t2m_" + str(i) for i in range(firn_memory)]
-)
-df['month'] = (pd.DatetimeIndex(df['date']).month-1)/11
+
+def create_model(n_layers, num_nodes):
+    model = Sequential()
+    model.add(GaussianNoise(0.01, input_shape=(len(Predictors),)))
+    for i in range(n_layers):
+        model.add(Dense(units=num_nodes, activation="relu"))
+    model.add(Dense(1))
+    model.compile(loss="mean_squared_error", optimizer="adam")
+    return model
+# Predictors = (
+#     ["month", "t2m_amp", "t2m_avg", "sf_avg"]
+#     + ["sf_" + str(i) for i in range(firn_memory)]
+#     + ["t2m_" + str(i) for i in range(firn_memory)]
+# )
+# df['month'] = np.cos((pd.DatetimeIndex(df['date']).month-1)/11/12*2*np.pi) 
 
 # %% Testing the stability of the ANN
-model = [None,None,None,None,None]
-PredictorScalerFit = [None,None,None,None,None]
-TargetVarScalerFit = [None,None,None,None,None]
-for i in range(5):
-    print(i)
-    model[i], PredictorScalerFit[i], TargetVarScalerFit[i] = train_ANN(
-        df, Predictors, num_nodes = 20, num_layers=2
-    )
-    
-# %% Plotting stability test
-df.loc[df.site=='CEN1','site'] = 'Camp Century'  
-df.loc[df.site=='CEN2','site'] = 'Camp Century'   
-df.loc[df.site=='CEN','site'] = 'Camp Century'   
-
-fig, ax = plt.subplots(2, 3, figsize=(15, 15))
-ax = ax.flatten()
-for k, site in enumerate(["SwissCamp", "DYE-2", "KAN_U", "Camp Century", 'KPC_U', 'QAS_U']):
-    df_select = df.loc[df.site == site, :].copy()
-
-    ax[k].plot(pd.to_datetime(df_select.date).values,
-                 df_select.temperatureObserved.values, 
-                 marker="x", linestyle='None', label="observations")
-    ax[k].set_title(site)
-
-    for i in range(4):
-        df_select['T10m_pred'] = ANN_model(df_select[Predictors], model[i], 
-                                        PredictorScalerFit[i], TargetVarScalerFit[i]).values
-        df_select = df_select.sort_values('date')
-        ax[k].plot(df_select.date, df_select.T10m_pred)
-
+test_stability=0
+if test_stability:
+    df_sub = df.loc[np.isin(df.site, ["Swiss Camp", "DYE-2", "KAN_U", "Camp Century", 'KPC_U', 'QAS_U']),:].copy()
+    for epochs in [20, 100, 200]:
+        print(epochs, 'epochs')
+        num_models = 10
+        model = [None]*num_models
+        PredictorScalerFit = [None]*num_models
+        TargetVarScalerFit = [None]*num_models
+        # training the models
+        for i in range(num_models):
+            # print(i)
+            model[i], PredictorScalerFit[i], TargetVarScalerFit[i] = train_ANN(
+                df, Predictors, num_nodes = 32, num_layers=2, epochs=epochs,
+            )
+            
+        # % Plotting model outputs
+        fig, ax = plt.subplots(2, 3, figsize=(15, 15))
+        ax = ax.flatten()
+        for k, site in enumerate(df_sub.site.unique()):
+            for i in range(num_models):
+                if i == 2:
+                    label = 'ANN models'
+                else:
+                    label = ' '
+                df_sub['out_mod_'+str(i)]  = np.nan
+                df_sub.loc[df_sub.site == site, 'out_mod_'+str(i)] = ANN_predict(
+                    df_sub.loc[df_sub.site == site, Predictors], 
+                    model[i], 
+                                                PredictorScalerFit[i], TargetVarScalerFit[i]).values
+                df_sub.loc[df_sub.site == site, :]  = df_sub.loc[df_sub.site == site, :] .sort_values('date')
+                ax[k].plot(df_sub.loc[df_sub.site == site, 'date'], 
+                           df_sub.loc[df_sub.site == site, 'out_mod_'+str(i)],
+                           alpha=0.5, label = label)
+            ax[k].plot(np.nan,np.nan,'w',label=' ')
+            ax[k].plot(pd.to_datetime(df_sub.loc[df_sub.site == site, 'date']).values,
+                         df_sub.loc[df_sub.site == site, 'temperatureObserved'].values, 
+                         marker="x", linestyle='None', label="observations")
+            ax[k].set_title(site)
+            ax[k].set_ylim(-25, 0)
+            print('Avg. st. dev. at',site, ': %0.2f'%df_sub.loc[df_sub.site == site, ['out_mod_'+str(i) for i in range(5)]].std(axis=1).mean(), '°C')
+        fig.suptitle(str(epochs)+' epochs')
+        ax[0].legend()
+# Average standard deviation between 10 models trained on the same data				
+# epochs        20 	    100 	1000 	5000 	10000 
+# SwissCamp	    0.69	0.58	0.59	0.64	0.57
+# DYE-2	        0.79	0.7  	0.45	0.44	0.42
+# KAN_U         0.68	0.61	0.52	0.51	0.46
+# Camp Century  0.7	    0.42	0.28	0.25	0.28
+# KPC_U         0.69	0.52	0.43	0.44	0.36
+# QAS_U	        0.45	0.53	0.37	0.39	0.37
 
 # %% GridSearch
-run_gridsearch = 1
-if run_gridsearch:
-    def create_model(n_layers, num_nodes):
-        model = Sequential()
-        model.add(GaussianNoise(0.01, input_shape=(len(Predictors),)))
-        for i in range(n_layers):
-            model.add(Dense(units=num_nodes, activation="relu"))
-        model.add(Dense(1))
-        model.compile(loss="mean_squared_error", optimizer="adam")
-        return model
-    
+run_gridsearch = 0
+if run_gridsearch:   
     w = df["weights"].values
     X = df[Predictors].values
     y = df["temperatureObserved"].values.reshape(-1, 1)
@@ -455,208 +386,21 @@ if run_gridsearch:
     params = grid_result.cv_results_['params']
     for mean, stdev, param in zip(means, stds, params):
         print("%f (%f) with: %r" % (mean, stdev, param))
-    
-# Best: 0.879104 using {'batch_size': 100, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
-# 0.857241 (0.065473) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 1, 'num_nodes': 16}
-# 0.860077 (0.080005) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 1, 'num_nodes': 32}
-# 0.879104 (0.072659) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
-# 0.860805 (0.094318) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 2, 'num_nodes': 16}
-# 0.874895 (0.063966) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 2, 'num_nodes': 32}
-# 0.853947 (0.100261) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 2, 'num_nodes': 64}
-# 0.861025 (0.078887) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 1, 'num_nodes': 16}
-# 0.856441 (0.077439) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 1, 'num_nodes': 32}
-# 0.860730 (0.091668) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 1, 'num_nodes': 64}
-# 0.843159 (0.094143) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 2, 'num_nodes': 16}
-# 0.858215 (0.097231) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 2, 'num_nodes': 32}
-# 0.859242 (0.114457) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 2, 'num_nodes': 64}
-# 0.863666 (0.075298) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 1, 'num_nodes': 16}
-# 0.859792 (0.099163) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 1, 'num_nodes': 32}
-# 0.869833 (0.080074) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 1, 'num_nodes': 64}
-# 0.852131 (0.132142) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 2, 'num_nodes': 16}
-# 0.876816 (0.058891) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 2, 'num_nodes': 32}
-# 0.818858 (0.209782) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 2, 'num_nodes': 64}
-# 0.674435 (0.184390) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 1, 'num_nodes': 16}
-# 0.792447 (0.082326) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 1, 'num_nodes': 32}
-# 0.834502 (0.057394) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
-# 0.774601 (0.077686) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 2, 'num_nodes': 16}
-# 0.817849 (0.108512) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 2, 'num_nodes': 32}
-# 0.861159 (0.064054) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 2, 'num_nodes': 64}
-# 0.805611 (0.070307) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 1, 'num_nodes': 16}
-# 0.843098 (0.058637) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 1, 'num_nodes': 32}
-# 0.870107 (0.072686) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 1, 'num_nodes': 64}
-# 0.851074 (0.087104) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 2, 'num_nodes': 16}
-# 0.850538 (0.097900) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 2, 'num_nodes': 32}
-# 0.852706 (0.096214) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 2, 'num_nodes': 64}
-# 0.862727 (0.075749) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 1, 'num_nodes': 16}
-# 0.874594 (0.062164) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 1, 'num_nodes': 32}
-# 0.866744 (0.075013) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 1, 'num_nodes': 64}
-# 0.819494 (0.146188) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 2, 'num_nodes': 16}
-# 0.823967 (0.161196) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 2, 'num_nodes': 32}
-# 0.811046 (0.196999) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 2, 'num_nodes': 64}
 
+# Gridsearch output for:
+# batch_size = [100, 1000], epochs = [20, 60, 500],
+# n_layers=[1, 2],  num_nodes = [16, 32, 64]
+# Best: 0.879104 using {'batch_size': 100, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
+
+# Gridsearch output for:
+# batch_size = [10, 50, 100, 200, 500, 1000], epochs = [20, 60, 500],
+# n_layers=[1, 2, 3],  num_nodes = [16, 32, 64]
 # Best: 0.923820 using {'batch_size': 10, 'epochs': 500, 'n_layers': 3, 'num_nodes': 32}
-# 0.844529 (0.075284) with: {'batch_size': 10, 'epochs': 20, 'n_layers': 1, 'num_nodes': 16}
-# 0.873701 (0.066676) with: {'batch_size': 10, 'epochs': 20, 'n_layers': 1, 'num_nodes': 32}
-# 0.858027 (0.077007) with: {'batch_size': 10, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
-# 0.826090 (0.142378) with: {'batch_size': 10, 'epochs': 20, 'n_layers': 2, 'num_nodes': 16}
-# 0.864002 (0.077259) with: {'batch_size': 10, 'epochs': 20, 'n_layers': 2, 'num_nodes': 32}
-# 0.841072 (0.119865) with: {'batch_size': 10, 'epochs': 20, 'n_layers': 2, 'num_nodes': 64}
-# 0.881552 (0.062824) with: {'batch_size': 10, 'epochs': 20, 'n_layers': 3, 'num_nodes': 16}
-# 0.861627 (0.088106) with: {'batch_size': 10, 'epochs': 20, 'n_layers': 3, 'num_nodes': 32}
-# 0.912169 (0.036335) with: {'batch_size': 10, 'epochs': 20, 'n_layers': 3, 'num_nodes': 64}
-# 0.881386 (0.058688) with: {'batch_size': 10, 'epochs': 60, 'n_layers': 1, 'num_nodes': 16}
-# 0.840390 (0.125936) with: {'batch_size': 10, 'epochs': 60, 'n_layers': 1, 'num_nodes': 32}
-# 0.874093 (0.070518) with: {'batch_size': 10, 'epochs': 60, 'n_layers': 1, 'num_nodes': 64}
-# 0.887282 (0.057080) with: {'batch_size': 10, 'epochs': 60, 'n_layers': 2, 'num_nodes': 16}
-# 0.885417 (0.077705) with: {'batch_size': 10, 'epochs': 60, 'n_layers': 2, 'num_nodes': 32}
-# 0.918250 (0.048708) with: {'batch_size': 10, 'epochs': 60, 'n_layers': 2, 'num_nodes': 64}
-# 0.851278 (0.155154) with: {'batch_size': 10, 'epochs': 60, 'n_layers': 3, 'num_nodes': 16}
-# 0.863428 (0.116801) with: {'batch_size': 10, 'epochs': 60, 'n_layers': 3, 'num_nodes': 32}
-# 0.899332 (0.059853) with: {'batch_size': 10, 'epochs': 60, 'n_layers': 3, 'num_nodes': 64}
-# 0.877228 (0.052393) with: {'batch_size': 10, 'epochs': 500, 'n_layers': 1, 'num_nodes': 16}
-# 0.818159 (0.159584) with: {'batch_size': 10, 'epochs': 500, 'n_layers': 1, 'num_nodes': 32}
-# 0.813186 (0.189483) with: {'batch_size': 10, 'epochs': 500, 'n_layers': 1, 'num_nodes': 64}
-# 0.867902 (0.074434) with: {'batch_size': 10, 'epochs': 500, 'n_layers': 2, 'num_nodes': 16}
-# 0.858507 (0.106467) with: {'batch_size': 10, 'epochs': 500, 'n_layers': 2, 'num_nodes': 32}
-# 0.659186 (0.521866) with: {'batch_size': 10, 'epochs': 500, 'n_layers': 2, 'num_nodes': 64}
-# 0.897671 (0.069333) with: {'batch_size': 10, 'epochs': 500, 'n_layers': 3, 'num_nodes': 16}
-# 0.923820 (0.029341) with: {'batch_size': 10, 'epochs': 500, 'n_layers': 3, 'num_nodes': 32}
-# 0.913571 (0.040977) with: {'batch_size': 10, 'epochs': 500, 'n_layers': 3, 'num_nodes': 64}
-# 0.877004 (0.063679) with: {'batch_size': 50, 'epochs': 20, 'n_layers': 1, 'num_nodes': 16}
-# 0.862982 (0.084786) with: {'batch_size': 50, 'epochs': 20, 'n_layers': 1, 'num_nodes': 32}
-# 0.863718 (0.083048) with: {'batch_size': 50, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
-# 0.832459 (0.120279) with: {'batch_size': 50, 'epochs': 20, 'n_layers': 2, 'num_nodes': 16}
-# 0.841155 (0.110298) with: {'batch_size': 50, 'epochs': 20, 'n_layers': 2, 'num_nodes': 32}
-# 0.853312 (0.112504) with: {'batch_size': 50, 'epochs': 20, 'n_layers': 2, 'num_nodes': 64}
-# 0.895317 (0.038178) with: {'batch_size': 50, 'epochs': 20, 'n_layers': 3, 'num_nodes': 16}
-# 0.887245 (0.060791) with: {'batch_size': 50, 'epochs': 20, 'n_layers': 3, 'num_nodes': 32}
-# 0.885847 (0.057671) with: {'batch_size': 50, 'epochs': 20, 'n_layers': 3, 'num_nodes': 64}
-# 0.872639 (0.072207) with: {'batch_size': 50, 'epochs': 60, 'n_layers': 1, 'num_nodes': 16}
-# 0.833624 (0.115754) with: {'batch_size': 50, 'epochs': 60, 'n_layers': 1, 'num_nodes': 32}
-# 0.854699 (0.081778) with: {'batch_size': 50, 'epochs': 60, 'n_layers': 1, 'num_nodes': 64}
-# 0.872223 (0.071181) with: {'batch_size': 50, 'epochs': 60, 'n_layers': 2, 'num_nodes': 16}
-# 0.835930 (0.130616) with: {'batch_size': 50, 'epochs': 60, 'n_layers': 2, 'num_nodes': 32}
-# 0.857792 (0.115435) with: {'batch_size': 50, 'epochs': 60, 'n_layers': 2, 'num_nodes': 64}
-# 0.838157 (0.122343) with: {'batch_size': 50, 'epochs': 60, 'n_layers': 3, 'num_nodes': 16}
-# 0.870870 (0.091012) with: {'batch_size': 50, 'epochs': 60, 'n_layers': 3, 'num_nodes': 32}
-# 0.813470 (0.212124) with: {'batch_size': 50, 'epochs': 60, 'n_layers': 3, 'num_nodes': 64}
-# 0.878629 (0.057566) with: {'batch_size': 50, 'epochs': 500, 'n_layers': 1, 'num_nodes': 16}
-# 0.850936 (0.073761) with: {'batch_size': 50, 'epochs': 500, 'n_layers': 1, 'num_nodes': 32}
-# 0.863573 (0.096596) with: {'batch_size': 50, 'epochs': 500, 'n_layers': 1, 'num_nodes': 64}
-# 0.675813 (0.469033) with: {'batch_size': 50, 'epochs': 500, 'n_layers': 2, 'num_nodes': 16}
-# 0.792314 (0.248194) with: {'batch_size': 50, 'epochs': 500, 'n_layers': 2, 'num_nodes': 32}
-# 0.817995 (0.190426) with: {'batch_size': 50, 'epochs': 500, 'n_layers': 2, 'num_nodes': 64}
-# 0.811142 (0.222227) with: {'batch_size': 50, 'epochs': 500, 'n_layers': 3, 'num_nodes': 16}
-# 0.807597 (0.222850) with: {'batch_size': 50, 'epochs': 500, 'n_layers': 3, 'num_nodes': 32}
-# 0.908239 (0.036493) with: {'batch_size': 50, 'epochs': 500, 'n_layers': 3, 'num_nodes': 64}
-# 0.812218 (0.129054) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 1, 'num_nodes': 16}
-# 0.865773 (0.071175) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 1, 'num_nodes': 32}
-# 0.868434 (0.071689) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
-# 0.866596 (0.059748) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 2, 'num_nodes': 16}
-# 0.880620 (0.068524) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 2, 'num_nodes': 32}
-# 0.875904 (0.062100) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 2, 'num_nodes': 64}
-# 0.839311 (0.102595) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 3, 'num_nodes': 16}
-# 0.882874 (0.055681) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 3, 'num_nodes': 32}
-# 0.868455 (0.081426) with: {'batch_size': 100, 'epochs': 20, 'n_layers': 3, 'num_nodes': 64}
-# 0.863460 (0.065367) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 1, 'num_nodes': 16}
-# 0.866599 (0.064661) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 1, 'num_nodes': 32}
-# 0.857613 (0.074432) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 1, 'num_nodes': 64}
-# 0.808258 (0.176927) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 2, 'num_nodes': 16}
-# 0.882571 (0.062809) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 2, 'num_nodes': 32}
-# 0.830703 (0.157012) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 2, 'num_nodes': 64}
-# 0.852125 (0.097893) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 3, 'num_nodes': 16}
-# 0.884170 (0.072567) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 3, 'num_nodes': 32}
-# 0.867169 (0.109768) with: {'batch_size': 100, 'epochs': 60, 'n_layers': 3, 'num_nodes': 64}
-# 0.848692 (0.091882) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 1, 'num_nodes': 16}
-# 0.874964 (0.047478) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 1, 'num_nodes': 32}
-# 0.855084 (0.121206) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 1, 'num_nodes': 64}
-# 0.903659 (0.046769) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 2, 'num_nodes': 16}
-# 0.845632 (0.125261) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 2, 'num_nodes': 32}
-# 0.837465 (0.164635) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 2, 'num_nodes': 64}
-# 0.592948 (0.657222) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 3, 'num_nodes': 16}
-# 0.857328 (0.130543) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 3, 'num_nodes': 32}
-# 0.844296 (0.155092) with: {'batch_size': 100, 'epochs': 500, 'n_layers': 3, 'num_nodes': 64}
-# 0.836834 (0.051308) with: {'batch_size': 200, 'epochs': 20, 'n_layers': 1, 'num_nodes': 16}
-# 0.828838 (0.082399) with: {'batch_size': 200, 'epochs': 20, 'n_layers': 1, 'num_nodes': 32}
-# 0.855467 (0.090524) with: {'batch_size': 200, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
-# 0.827237 (0.097426) with: {'batch_size': 200, 'epochs': 20, 'n_layers': 2, 'num_nodes': 16}
-# 0.855404 (0.095285) with: {'batch_size': 200, 'epochs': 20, 'n_layers': 2, 'num_nodes': 32}
-# 0.875770 (0.071608) with: {'batch_size': 200, 'epochs': 20, 'n_layers': 2, 'num_nodes': 64}
-# 0.874165 (0.046712) with: {'batch_size': 200, 'epochs': 20, 'n_layers': 3, 'num_nodes': 16}
-# 0.892649 (0.062619) with: {'batch_size': 200, 'epochs': 20, 'n_layers': 3, 'num_nodes': 32}
-# 0.863691 (0.088192) with: {'batch_size': 200, 'epochs': 20, 'n_layers': 3, 'num_nodes': 64}
-# 0.822967 (0.127743) with: {'batch_size': 200, 'epochs': 60, 'n_layers': 1, 'num_nodes': 16}
-# 0.847282 (0.093362) with: {'batch_size': 200, 'epochs': 60, 'n_layers': 1, 'num_nodes': 32}
-# 0.855494 (0.086676) with: {'batch_size': 200, 'epochs': 60, 'n_layers': 1, 'num_nodes': 64}
-# 0.855420 (0.094188) with: {'batch_size': 200, 'epochs': 60, 'n_layers': 2, 'num_nodes': 16}
-# 0.867574 (0.077291) with: {'batch_size': 200, 'epochs': 60, 'n_layers': 2, 'num_nodes': 32}
-# 0.850076 (0.118099) with: {'batch_size': 200, 'epochs': 60, 'n_layers': 2, 'num_nodes': 64}
-# 0.836635 (0.112296) with: {'batch_size': 200, 'epochs': 60, 'n_layers': 3, 'num_nodes': 16}
-# 0.861122 (0.095094) with: {'batch_size': 200, 'epochs': 60, 'n_layers': 3, 'num_nodes': 32}
-# 0.851315 (0.118450) with: {'batch_size': 200, 'epochs': 60, 'n_layers': 3, 'num_nodes': 64}
-# 0.858401 (0.076864) with: {'batch_size': 200, 'epochs': 500, 'n_layers': 1, 'num_nodes': 16}
-# 0.890832 (0.050454) with: {'batch_size': 200, 'epochs': 500, 'n_layers': 1, 'num_nodes': 32}
-# 0.879069 (0.066883) with: {'batch_size': 200, 'epochs': 500, 'n_layers': 1, 'num_nodes': 64}
-# 0.851814 (0.111734) with: {'batch_size': 200, 'epochs': 500, 'n_layers': 2, 'num_nodes': 16}
-# 0.837296 (0.142046) with: {'batch_size': 200, 'epochs': 500, 'n_layers': 2, 'num_nodes': 32}
-# 0.818494 (0.178636) with: {'batch_size': 200, 'epochs': 500, 'n_layers': 2, 'num_nodes': 64}
-# 0.857226 (0.122708) with: {'batch_size': 200, 'epochs': 500, 'n_layers': 3, 'num_nodes': 16}
-# 0.666383 (0.490050) with: {'batch_size': 200, 'epochs': 500, 'n_layers': 3, 'num_nodes': 32}
-# 0.863838 (0.103008) with: {'batch_size': 200, 'epochs': 500, 'n_layers': 3, 'num_nodes': 64}
-# 0.812110 (0.104727) with: {'batch_size': 500, 'epochs': 20, 'n_layers': 1, 'num_nodes': 16}
-# 0.859718 (0.057583) with: {'batch_size': 500, 'epochs': 20, 'n_layers': 1, 'num_nodes': 32}
-# 0.844393 (0.053225) with: {'batch_size': 500, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
-# 0.853451 (0.061320) with: {'batch_size': 500, 'epochs': 20, 'n_layers': 2, 'num_nodes': 16}
-# 0.838093 (0.112257) with: {'batch_size': 500, 'epochs': 20, 'n_layers': 2, 'num_nodes': 32}
-# 0.864915 (0.083922) with: {'batch_size': 500, 'epochs': 20, 'n_layers': 2, 'num_nodes': 64}
-# 0.848703 (0.087141) with: {'batch_size': 500, 'epochs': 20, 'n_layers': 3, 'num_nodes': 16}
-# 0.843624 (0.082051) with: {'batch_size': 500, 'epochs': 20, 'n_layers': 3, 'num_nodes': 32}
-# 0.863965 (0.084753) with: {'batch_size': 500, 'epochs': 20, 'n_layers': 3, 'num_nodes': 64}
-# 0.854150 (0.074751) with: {'batch_size': 500, 'epochs': 60, 'n_layers': 1, 'num_nodes': 16}
-# 0.854836 (0.080819) with: {'batch_size': 500, 'epochs': 60, 'n_layers': 1, 'num_nodes': 32}
-# 0.864091 (0.076044) with: {'batch_size': 500, 'epochs': 60, 'n_layers': 1, 'num_nodes': 64}
-# 0.884499 (0.061321) with: {'batch_size': 500, 'epochs': 60, 'n_layers': 2, 'num_nodes': 16}
-# 0.852858 (0.095270) with: {'batch_size': 500, 'epochs': 60, 'n_layers': 2, 'num_nodes': 32}
-# 0.863864 (0.101577) with: {'batch_size': 500, 'epochs': 60, 'n_layers': 2, 'num_nodes': 64}
-# 0.866821 (0.068214) with: {'batch_size': 500, 'epochs': 60, 'n_layers': 3, 'num_nodes': 16}
-# 0.848448 (0.105475) with: {'batch_size': 500, 'epochs': 60, 'n_layers': 3, 'num_nodes': 32}
-# 0.831504 (0.130678) with: {'batch_size': 500, 'epochs': 60, 'n_layers': 3, 'num_nodes': 64}
-# 0.849783 (0.094818) with: {'batch_size': 500, 'epochs': 500, 'n_layers': 1, 'num_nodes': 16}
-# 0.877055 (0.071126) with: {'batch_size': 500, 'epochs': 500, 'n_layers': 1, 'num_nodes': 32}
-# 0.885074 (0.061617) with: {'batch_size': 500, 'epochs': 500, 'n_layers': 1, 'num_nodes': 64}
-# 0.875603 (0.058841) with: {'batch_size': 500, 'epochs': 500, 'n_layers': 2, 'num_nodes': 16}
-# 0.865739 (0.095970) with: {'batch_size': 500, 'epochs': 500, 'n_layers': 2, 'num_nodes': 32}
-# 0.891768 (0.066455) with: {'batch_size': 500, 'epochs': 500, 'n_layers': 2, 'num_nodes': 64}
-# 0.863147 (0.108773) with: {'batch_size': 500, 'epochs': 500, 'n_layers': 3, 'num_nodes': 16}
-# 0.728113 (0.371166) with: {'batch_size': 500, 'epochs': 500, 'n_layers': 3, 'num_nodes': 32}
-# 0.756440 (0.330313) with: {'batch_size': 500, 'epochs': 500, 'n_layers': 3, 'num_nodes': 64}
-# 0.491443 (0.493817) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 1, 'num_nodes': 16}
-# 0.790247 (0.118426) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 1, 'num_nodes': 32}
-# 0.832660 (0.062930) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 1, 'num_nodes': 64}
-# 0.694265 (0.125558) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 2, 'num_nodes': 16}
-# 0.867550 (0.067293) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 2, 'num_nodes': 32}
-# 0.833219 (0.112063) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 2, 'num_nodes': 64}
-# 0.815469 (0.099156) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 3, 'num_nodes': 16}
-# 0.864070 (0.080145) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 3, 'num_nodes': 32}
-# 0.860014 (0.090787) with: {'batch_size': 1000, 'epochs': 20, 'n_layers': 3, 'num_nodes': 64}
-# 0.809860 (0.049927) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 1, 'num_nodes': 16}
-# 0.853416 (0.073050) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 1, 'num_nodes': 32}
-# 0.844215 (0.092269) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 1, 'num_nodes': 64}
-# 0.846142 (0.068664) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 2, 'num_nodes': 16}
-# 0.874897 (0.074476) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 2, 'num_nodes': 32}
-# 0.876098 (0.078126) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 2, 'num_nodes': 64}
-# 0.878405 (0.066481) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 3, 'num_nodes': 16}
-# 0.871540 (0.072514) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 3, 'num_nodes': 32}
-# 0.869007 (0.080054) with: {'batch_size': 1000, 'epochs': 60, 'n_layers': 3, 'num_nodes': 64}
-# 0.859760 (0.080814) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 1, 'num_nodes': 16}
-# 0.863719 (0.073954) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 1, 'num_nodes': 32}
-# 0.857214 (0.085003) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 1, 'num_nodes': 64}
-# 0.891409 (0.057571) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 2, 'num_nodes': 16}
-# 0.879160 (0.077732) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 2, 'num_nodes': 32}
-# 0.827773 (0.159106) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 2, 'num_nodes': 64}
-# 0.870521 (0.086786) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 3, 'num_nodes': 16}
-# 0.852455 (0.117129) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 3, 'num_nodes': 32}
-# 0.788944 (0.259407) with: {'batch_size': 1000, 'epochs': 500, 'n_layers': 3, 'num_nodes': 64}
+
+# %% best model
+best_model, best_PredictorScalerFit, best_TargetVarScalerFit = train_ANN(
+    df, Predictors, num_nodes = 32, num_layers=2, epochs=1000,
+)
 # %% spatial cross-validation:
 print("fitting cross-validation models")
 zwally = gpd.GeoDataFrame.from_file("Data/misc/Zwally_10_zones_3413.shp")
@@ -689,7 +433,7 @@ df = df.sort_values("date")
 def ANN_model_cv(df_pred, model_list):
     pred = pd.DataFrame()
     for i in range(zwally.shape[0]):
-        pred["T10m_pred_" + str(i)] = ANN_model(df_pred, model_list[i])
+        pred["T10m_pred_" + str(i)] = ANN_predict(df_pred, model_list[i])
     df_mean = pred.mean(axis=1)
     df_std = pred.std(axis=1)
     return df_mean.values, df_std.values
@@ -697,11 +441,11 @@ def ANN_model_cv(df_pred, model_list):
 
 plt.figure()
 plt.plot(
-    df.temperatureObserved, ANN_model(df[Predictors], model), "o", linestyle="None"
+    df.temperatureObserved, ANN_predict(df[Predictors], model), "o", linestyle="None"
 )
-ME = np.mean(df.temperatureObserved - ANN_model(df[Predictors], model))
+ME = np.mean(df.temperatureObserved - ANN_predict(df[Predictors], model))
 RMSE = np.sqrt(
-    np.mean((df.temperatureObserved - ANN_model(df[Predictors], model)) ** 2)
+    np.mean((df.temperatureObserved - ANN_predict(df[Predictors], model)) ** 2)
 )
 plt.title("N = %i ME = %0.2f RMSE = %0.2f" % (len(df.temperatureObserved), ME, RMSE))
 
@@ -713,7 +457,7 @@ for k, site in enumerate(["DYE-2", "Summit", "KAN_U", "EKT"]):
         df_select[Predictors], model_list
     )
 
-    best_model = ANN_model(df_select[Predictors], model)
+    best_model = ANN_predict(df_select[Predictors], model)
     ax[k].fill(
         np.append(df_select.date, df_select.date[::-1]),
         np.append(
@@ -729,7 +473,7 @@ for k, site in enumerate(["DYE-2", "Summit", "KAN_U", "EKT"]):
             lab = "_no_legend_"
         ax[k].plot(
             df_select.date,
-            ANN_model(df_select[Predictors], model_list[i]),
+            ANN_predict(df_select[Predictors], model_list[i]),
             "-",
             color="lightgray",
             alpha=0.8,
@@ -747,23 +491,23 @@ for k, site in enumerate(["DYE-2", "Summit", "KAN_U", "EKT"]):
     ax[k].set_title(site)
 ax[k].legend()
 
-# %% Predicting T10m
-predict = 0
-if predict:
+# %% Predicting T10m over ERA5 dataset
+predict = 1
+
+if predict:    
     print("predicting T10m over entire ERA5 dataset")
-    ds_T10m = ds_era["t2m"].copy().rename("T10m") * np.nan
-    for time in progressbar.progressbar(
-        ds_T10m.time.to_dataframe().values[12 * firn_memory :]
-    ):
-        tmp = ds_era.sel(time=time).to_dataframe()
-        tmp["month"] = (pd.to_datetime(time[0]).month - 1) / 12
-        out = ANN_model(tmp[Predictors], model)
-        ds_T10m.loc[dict(time=time)] = (
-            out.to_frame()
-            .to_xarray()["temperaturePredicted"]
-            .transpose("time", "latitude", "longitude")
-            .values
-        )
+    print('converting to dataframe')
+    tmp = ds_era[Predictors].to_dataframe()
+    tmp = tmp.loc[tmp.notnull().all(1),:]
+    
+    print('applying ANN (takes ~45min on my laptop)')
+    out = ANN_predict(tmp, best_model, best_PredictorScalerFit, best_TargetVarScalerFit)
+
+    print(time.now() - t1)
+    ds_T10m = out.to_frame().to_xarray()["temperaturePredicted"]
+        .transpose("time", "latitude", "longitude")
+        .values
+    )
 
     ds_T10m.to_netcdf("predicted_T10m.nc")
 ds_T10m = xr.open_dataset("predicted_T10m.nc")["T10m"]

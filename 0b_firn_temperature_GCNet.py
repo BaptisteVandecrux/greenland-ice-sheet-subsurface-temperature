@@ -13,151 +13,114 @@ import numpy as np
 import firn_temp_lib as ftl
 
 plt.close('all')
-# %% Old GC-Net stations not processed in Vandecrux et al. 2020
-meta = pd.read_csv("Data/GC-Net/Gc-net_documentation_Nov_10_2000.csv")
+
+#  all GC-Net stations
+from nead import read
+np.seterr(invalid="ignore")
+df_info = pd.read_csv('Data/GC-Net/GC-Net_location.csv', skipinitialspace=True)
+df_info = df_info.loc[df_info.Northing>0,:]
+path_to_GCNet = 'C:/Users/bav/OneDrive - Geological survey of Denmark and Greenland/Code/PROMICE/GC-Net-Level-1-data-processing/L1/'
+
+# df_info = df_info.loc[df_info.Name=='Swiss Camp']
+plotting = False
+if plotting:
+    print('plotting')
+    for ID, site in zip(df_info.ID, df_info.Name):   
+        df_aws = read(path_to_GCNet+str(ID).zfill(2)+'-'+site.replace(' ','')+'.csv').to_dataframe()
+        df_aws['time'] = pd.to_datetime(df_aws.timestamp, utc=True)
+        df_aws = df_aws.set_index('time')
+        
+        depth_cols_name = [v for v in df_aws.columns if "DTS" in v]
+        temp_cols_name = [v for v in df_aws.columns if "TS" in v and "DTS" not in v and "10m" not in v]
+        print(site)
+        if len(temp_cols_name)==0:
+            print('No thermistor data')
+            continue
+    
+        if df_aws[temp_cols_name].isnull().all().all():
+            print('No thermistor data')
+            continue
+        fig, ax = plt.subplots(1, 2, figsize=(9, 3.5))
+        plt.subplots_adjust(left=0.08, right=0.98, wspace=0.25, top=0.9)
+        df_aws["HS_combined"].plot(
+            ax=ax[0], color="black", label="surface", linewidth=2
+        )
+        (df_aws["HS_combined"] - 10).plot(
+            ax=ax[0],
+            color="red",
+            linestyle="-",
+            linewidth=2,
+            label="10 m depth",
+        )
+    
+    
+        for i, col in enumerate(depth_cols_name):
+            (-df_aws[col] + df_aws["HS_combined"]).plot(
+                ax=ax[0],
+                label="_nolegend_",alpha=0.5,
+            )
+    
+        ax[0].set_ylim(
+            df_aws["HS_combined"].min() - 22,
+            df_aws["HS_combined"].max() + 1,
+        )
+        # ax[1].set_ylim(-48, -11)
+        
+        for i in range(len(temp_cols_name)):
+            df_aws[temp_cols_name[i]].interpolate(limit=14).plot(
+                ax=ax[1], label="_nolegend_", alpha=0.5, linewidth=0.5
+            )
+    
+        if len(df_aws["TS_10m"]) == 0:
+            print("No 10m temp for ", site)
+        else:
+            df_aws["TS_10m"].resample(
+                "W"
+            ).mean().plot(ax=ax[1], color="red", linewidth=3, label="10 m temperature")
+        for i in range(2):
+            ax[i].plot(np.nan, np.nan, c='w', label=' ') 
+            ax[i].plot(np.nan, np.nan, c='w', label='individual sensors') 
+            ax[i].plot(np.nan, np.nan, c='w', label=' ') 
+            ax[i].legend(loc='lower right')
+        ax[0].set_ylabel("Height (m)")
+        ax[1].set_ylabel("Subsurface temperature ($^o$C)")
+        fig.suptitle(site)
+        fig.savefig("figures/string processing/GC-Net_" + site + ".png", dpi=300)
+
+
+# %% 10 m firn temp
 df_gcn = pd.DataFrame()
 
-for site_id in [1, 4, 5, 9, 13, 14, 22]:  # , 23]:
-    site = meta.loc[meta.ID == site_id, "Station Name"].values[0]
-    header = 52
+for ID, site in zip(df_info.ID, df_info.Name):   
+    df_aws = read(path_to_GCNet+str(ID).zfill(2)+'-'+site.replace(' ','')+'_daily.csv').to_dataframe()
+    df_aws['time'] = pd.to_datetime(df_aws.timestamp, utc=True)
+    df_aws = df_aws.set_index('time')
+    print(site)
+    if 'TS_10m' not in df_aws.columns:
+        print('No 10m temperature data')
+        continue        
+    if df_aws['TS_10m'].isnull().all():
+        print('No 10m temperature data')
+        continue
 
-    if site_id == 23:
-        header = 34
-        # 18 - 29
-    df = pd.read_csv(
-        "Data/GC-Net/" + str(site_id).zfill(2) + "c.dat_Req1957",
-        sep=" ",
-        skiprows=header + 1,
-        header=None,
-        index_col=None,
-    )
-    df = df.iloc[:, [1, 2] + [i for i in range(17, 29)]]
-    df[df == 999] = np.nan
-    temp_cols = ["TS" + str(i) for i in range(1, 11)]
-    df.columns = ["year", "doy", "HS1", "HS2"] + temp_cols
-    df["time"] = (np.asarray(df["year"], dtype="datetime64[Y]") - 1970) + (
-        np.asarray((df["doy"] - 1) * 86400 * 1e9, dtype="timedelta64[ns]")
-    )
-    df = df.set_index("time")
-    df = df.resample("M").mean()
-
-    ind_first = df[temp_cols].mean(axis=1, skipna=True).first_valid_index()
-    if site == "GITS":
-        ind_first = pd.to_datetime("2001-03-01")
-
-    ind_last = df[temp_cols].mean(axis=1, skipna=True).last_valid_index()
-    if site == "Humboldt":
-        ind_last = pd.to_datetime("2008-03-01")
-    if site == "JAR":
-        ind_last = pd.to_datetime("2003-03-01")
-    if site == "PET-ELA":
-        ind_last = pd.to_datetime("2006-05-01")
-    if site == "SwissCamp":
-        ind_last = pd.to_datetime("2011-01-01")
-    df = df.loc[ind_first:ind_last, :]
-
-    df_save = df.copy()
-
-    if site == "NGRIP":
-        df.loc["2005-06-01":, "HS1"] = df.loc["2005-06-01":, "HS1"].values + 1.5
-        df.loc["2005-06-01":, "HS2"] = df.loc["2005-06-01":, "HS2"].values + 1.5
-        df.loc["2006-06-01":, "HS1"] = df.loc["2006-06-01":, "HS1"].values + 0.5
-        df.loc["2006-06-01":, "HS2"] = df.loc["2006-06-01":, "HS2"].values + 0.5
-    if site == "SwissCamp":
-        df.loc["2004-03-01":, "HS1"] = df.loc["2004-03-01":, "HS1"].values - 2
-        df.loc["2004-03-01":, "HS2"] = df.loc["2004-03-01":, "HS2"].values - 2
-        df.loc["2011-03-01":, "HS1"] = df.loc["2011-03-01":, "HS1"].values - 5
-        df.loc["2011-03-01":, "HS2"] = df.loc["2011-03-01":, "HS2"].values - 5
-        df.loc["2012-01-01":, "HS1"] = df.loc["2012-01-01":, "HS1"].values + 3
-        df.loc["2012-01-01":, "HS2"] = df.loc["2012-01-01":, "HS2"].values + 3
-        df.loc["2016-05-01":, "HS1"] = df.loc["2016-05-01":, "HS1"].values - 3
-        df.loc["2016-05-01":, "HS2"] = df.loc["2016-05-01":, "HS2"].values - 3
-    # if site == 'GITS':
-    #     df.loc['1999-01-01':,'HS1'] = df.loc['1999-01-01':,'HS1'].values+3
-    #     df.loc['1999-01-01':,'HS2'] = df.loc['1999-01-01':,'HS2'].values+3
-    #     df.loc['2001-01-01':,'HS1'] = df.loc['2001-01-01':,'HS1'].values+2
-    #     df.loc['2001-01-01':,'HS2'] = df.loc['2001-01-01':,'HS2'].values+2
-    if site == "Humboldt":
-        df.loc["2007-02-01":, "HS1"] = df.loc["2007-02-01":, "HS1"].values + 1.4
-        df.loc["2007-02-01":, "HS2"] = df.loc["2007-02-01":, "HS2"].values + 1.4
-        df.loc["2003-04-01":"2003-05-01", "HS1"] = np.nan
-        df.loc["2003-04-01":"2003-05-01", "HS2"] = np.nan
-
-    df["HS_summary"] = df[["HS1", "HS2"]].mean(axis=1, skipna=True)
-    if all(df["HS_summary"].isnull()):
-        df["HS_summary"] = 0
-    df["HS_summary"] = (
-        df["HS_summary"] - df["HS_summary"][df["HS_summary"].first_valid_index()]
-    )
-    df["HS_summary"] = df["HS_summary"].interpolate()
-
-    fig, ax = plt.subplots()
-    df_save["HS1"].plot(ax=ax)
-    df_save["HS2"].plot(ax=ax)
-    plt.title(site)
-    df["HS1"].plot(ax=ax)
-    df["HS2"].plot(ax=ax)
-    df["HS_summary"].plot(ax=ax, linewidth=3)
-    plt.title(site)
-
-    depth_cols = ["depth_" + str(i) for i in range(1, 11)]
-    depth_ini_val = [0.1, 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 7.1, 8.1, 9.1]
-    depth_ini_val = np.flip(depth_ini_val)
-
-    if site == "PET-ELA":
-        depth_ini_val = np.flip(depth_ini_val)
-    if site == "Humboldt":
-        depth_ini_val = [0.1, 9.1, 8.1, 7.1, 6.1, 5.1, 4.1, 3.1, 2.1, 1.1]
-
-    if site == "GITS":
-        df_gits = df
-        df = pd.read_csv(
-            "Data/GC-Net/data_GITS_combined_hour.txt", sep="\t", index_col=False
-        )
-        df = df.loc[df.Year > 1998, :]
-        df = df.loc[df.Year < 2003, :]
-        df[df == -999] = np.nan
-
-        df["HS_summary"] = df["SurfaceHeightm"]
-
-        df["date"] = pd.to_datetime(df["time"] - 719529, unit="d").round("s")
-        df = df.set_index("date")
-        df = df.resample("M").mean()
-
-        temp_cols = ["IceTemperature" + str(i) + "C" for i in range(1, 11)]
-
-    for i, depth in enumerate(depth_cols):
-        df[depth] = depth_ini_val[i] + df["HS_summary"]
-
-    df_10 = ftl.interpolate_temperature(
-        df.index, df[depth_cols].values, df[temp_cols].values, kind="linear", title=site
-    )
-    df_10 = df_10.reset_index()
-    df_10["latitude"] = meta.loc[meta["Station Name"] == site, "Northing"].values[0]
-    df_10["longitude"] = meta.loc[meta["Station Name"] == site, "Easting"].values[0]
-    df_10["elevation"] = meta.loc[meta["Station Name"] == site, "Elevation"].values[0]
-    df_10["reference"] = "GC-Net"
-    df_10["reference_short"] = "GC-Net"
+    df_10 = df_aws[['TS_10m']].copy()
+    df_10.columns = ['temperatureObserved']
+    df_10.index = df_10.index.rename('date')
+    
+    df_10["latitude"] = df_info.loc[df_info.Name==site, "Northing"].values[0]
+    df_10["longitude"] = df_info.loc[df_info.Name==site, "Easting"].values[0]
+    df_10["elevation"] = df_info.loc[df_info.Name==site, "Elevationm"].values[0]
     df_10["site"] = site
-    df_10["note"] = "depth unsure"
     df_10["depthOfTemperatureObservation"] = 10
-    df_gcn = pd.concat((df_gcn,
-        df_10[
-            [
-                "date",
-                "site",
-                "latitude",
-                "longitude",
-                "elevation",
-                "depthOfTemperatureObservation",
-                "temperatureObserved",
-                "reference",
-                "reference_short",
-                "note",
-            ]
-        ]
-    ))
+    df_10["note"] = ""
 
+    # filtering
+    df_10.loc[df_10["temperatureObserved"] > 0.1, "TS_10m"] = np.nan
+    df_10.loc[df_10["temperatureObserved"] < -70, "TS_10m"] = np.nan
+    df_save = df_10.copy()
+    df_gcn = pd.concat((df_gcn, df_10.reset_index()))
+
+df_gcn = df_gcn.loc[df_gcn.temperatureObserved.notnull(), :]
 
 #%% Summit string 2007-2009
 df = pd.read_csv('Data/GC-Net/Summit Snow Thermistors/2007-2009/t_hour.dat', delim_whitespace=True, header=None)
@@ -171,7 +134,7 @@ df.loc[df.day==367,'day'] = 1
 
 df['hour'] = np.trunc(df.hour_min/100)
 df['minute'] = df.hour_min - df.hour*100
-df['time'] = pd.to_datetime(df.year*100000+df.day*100+df.hour, format='%Y%j%H', errors='coerce')
+df['time'] = pd.to_datetime(df.year*100000+df.day*100+df.hour, format='%Y%j%H', utc=True, errors='coerce')
 df = df.set_index('time').drop(columns=['year','hour','minute','id','day', 'hour_min'])
 
 
@@ -186,7 +149,7 @@ df3.loc[df3.day==367,'day'] = 1
 
 df3['hour'] = np.trunc(df3.hour_min/100)
 df3['minute'] = df3.hour_min - df3.hour*100
-df3['time'] = pd.to_datetime(df3.year*100000+df3.day*100+df3.hour, format='%Y%j%H', errors='coerce')
+df3['time'] = pd.to_datetime(df3.year*100000+df3.day*100+df3.hour, format='%Y%j%H', utc=True, errors='coerce')
 df3 = df3.set_index('time').drop(columns=['year','hour','minute','day', 'hour_min'])
 df3[['t_1','t_2']] = np.nan
 
@@ -211,7 +174,7 @@ depths =  np.array([[2.15, 2.65, 3.15, 3.65, 4.15, 4.65,
 
 for i, date in enumerate(['2007-04-07', '2008-07-25', '2009-05-19']):
     tmp = df.iloc[0:1,:]*np.nan
-    tmp.index = [pd.to_datetime(date)]
+    tmp.index = [pd.to_datetime(date, utc=True)]
     tmp['surface_height'] = surface[i]
     tmp[col_depth] = depths[i,:]
     df = pd.concat((tmp,df))
@@ -230,11 +193,12 @@ df_10 = ftl.interpolate_temperature(
     surface_height=df.surface_height, kind="linear", title='Summit'
 )
 
+
 df_10 = df_10.reset_index()
 site = 'Summit'
-df_10["latitude"] = meta.loc[meta["Station Name"] == site, "Northing"].values[0]
-df_10["longitude"] = meta.loc[meta["Station Name"] == site, "Easting"].values[0]
-df_10["elevation"] = meta.loc[meta["Station Name"] == site, "Elevation"].values[0]
+df_10["latitude"] = df_info.loc[df_info["Name"] == site, "Northing"].values[0]
+df_10["longitude"] = df_info.loc[df_info["Name"] == site, "Easting"].values[0]
+df_10["elevation"] = df_info.loc[df_info["Name"] == site, "Elevationm"].values[0]
 df_10["reference"] = "GC-Net"
 df_10["reference_short"] = "GC-Net"
 df_10["site"] = site + ''
@@ -277,7 +241,7 @@ df.loc[df.day==367,'day'] = 1
 
 df['hour'] = np.trunc(df.hour_min/100)
 df['minute'] = df.hour_min - df.hour*100
-df['time'] = pd.to_datetime(df.year*100000+df.day*100+df.hour, format='%Y%j%H', errors='coerce')
+df['time'] = pd.to_datetime(df.year*100000+df.day*100+df.hour, format='%Y%j%H',utc=True, errors='coerce')
 df = df.set_index('time')  #.drop(columns=['year','hour','minute','id','day', 'hour_min'])
 
 col_temp = [v for v in df.columns if 't_' in v]
@@ -316,7 +280,7 @@ depths = ['10m', '9m', '8m', '7m', '6m', '5m', '4m', '3m', '2.5m', '2m', '1.5m',
        '1m', '0.75m', '0.5m', '0.3m', '0.1m']
 for col,col2 in zip(depths, col_temp):
     # df_new[[col]].plot(ax=plt.gca(), marker = 'o', linestyle = 'None')
-    # df[[col2]].plot(ax=plt.gca())
+    # df[[col2]].ds_ann.T10m.sel(time=slice('1980','2016')).mean(dim='time').weighted(weights).mean().valuest(ax=plt.gca())
     df['depth_'+col2.replace('t_','')]=np.nan
     df['depth_'+col2.replace('t_','')] = float(col.replace('m','')) +  np.arange(len(df.index)) * 0.62/365/24
 df.loc['2001-06-11':'2001-12-15', 't_2'] = np.nan
@@ -328,9 +292,9 @@ df_10 = ftl.interpolate_temperature(
 
 df_10 = df_10.reset_index()
 site = 'Summit'
-df_10["latitude"] = meta.loc[meta["Station Name"] == site, "Northing"].values[0]
-df_10["longitude"] = meta.loc[meta["Station Name"] == site, "Easting"].values[0]
-df_10["elevation"] = meta.loc[meta["Station Name"] == site, "Elevation"].values[0]
+df_10["latitude"] = df_info.loc[df_info["Name"] == site, "Northing"].values[0]
+df_10["longitude"] = df_info.loc[df_info["Name"] == site, "Easting"].values[0]
+df_10["elevation"] = df_info.loc[df_info["Name"] == site, "Elevationm"].values[0]
 df_10["reference"] = "GC-Net"
 df_10["reference_short"] = "GC-Net"
 df_10["site"] = site + ''
@@ -353,7 +317,7 @@ df_gcn = pd.concat((df_gcn,
     ]
 ))
 
-# %% 
+# %% Swiss Camp TENT thermistor
 import os
 list_file = os.listdir('Data/GC-Net/Swiss Camp TENT thermistor')
 list_file = [f for f in list_file if f.lower().endswith('.dat')]
@@ -374,7 +338,7 @@ for f in list_file:
             df.loc[slice(ind), 'year'] = year - (len(df.loc[df.doy.diff()<0,:].index.values)-i)
     df_swc = pd.concat((df_swc,df))
     
-df_swc['time'] = pd.to_datetime(df_swc.year*1000+df_swc.doy, format='%Y%j', errors='coerce')
+df_swc['time'] = pd.to_datetime(df_swc.year*1000+df_swc.doy, format='%Y%j', utc=True, errors='coerce')
 df_swc = df_swc.set_index('time')  #.drop(columns=['year','hour','minute','id','day', 'hour_min'])
 
 col_temp = [v for v in df.columns if 't_' in v]
@@ -387,10 +351,10 @@ df_swc[col_temp].plot()
 
 df_10 = df_swc['t_10'].reset_index()
 df_10 = df_10.rename(columns={'time':'date','t_10':'temperatureObserved'})
-site = 'SwissCamp'
-df_10["latitude"] = meta.loc[meta["Station Name"] == site, "Northing"].values[0]
-df_10["longitude"] = meta.loc[meta["Station Name"] == site, "Easting"].values[0]
-df_10["elevation"] = meta.loc[meta["Station Name"] == site, "Elevation"].values[0]
+site = 'Swiss Camp'
+df_10["latitude"] = df_info.loc[df_info["Name"] == site, "Northing"].values[0]
+df_10["longitude"] = df_info.loc[df_info["Name"] == site, "Easting"].values[0]
+df_10["elevation"] = df_info.loc[df_info["Name"] == site, "Elevationm"].values[0]
 df_10["reference"] = "GC-Net"
 df_10["reference_short"] = "GC-Net"
 df_10["site"] = site + ''
@@ -412,5 +376,8 @@ df_gcn = pd.concat((df_gcn,
         ]
     ]
 ))
-# %% 
+
+
+# %% print to file
+
 df_gcn.to_csv("Data/GC-Net/10m_firn_temperature.csv")

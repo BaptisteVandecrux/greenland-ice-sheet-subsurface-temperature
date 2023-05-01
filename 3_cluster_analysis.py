@@ -102,7 +102,7 @@ plt.savefig("figures/fig1_map.png")
 
 from sklearn.cluster import DBSCAN
 
-epsilon = 5000
+epsilon = 4500
 gdf["x"] = gdf.geometry.x
 gdf["y"] = gdf.geometry.y
 
@@ -186,13 +186,14 @@ for cluster_id in unique_labels:
 
     tmp = gdf.loc[cluster_id]
     ref_list = tmp.reference_short.unique()
+    print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year),',', tmp.shape[0])
     if len(ref_list) > 1:
         # if np.nanmax(tmp.year)-np.nanmin(tmp.year) < 5:
         #     continue
-        print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year))
+        
 
         # i = i+1
-        fig, ax = plt.subplots(1, 1, figsize=(13, 10))
+        fig, ax = plt.subplots(1, 1, figsize=(8, 5))
         ax = [ax]
         i = 0
         for ref in ref_list:

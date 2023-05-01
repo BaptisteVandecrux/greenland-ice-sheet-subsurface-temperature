@@ -375,67 +375,8 @@ df_all = pd.concat((df_all,
     ), ignore_index=True,
 )
 
-# %%  GC-Net from JoG 2020
-print("Loading GC-Net")
-time.sleep(0.2)
 
-sites = [ "CP1", "NASA-U", "Summit", "TUNU-N", "DYE-2", "Saddle", "SouthDome", "NASA-E", "NASA-SE"]
-lat = [ 69.87975, 73.84189, 72.57972, 78.01677, 66.48001, 65.99947, 63.14889, 75, 66.4797]
-lon = [ -46.98667, -49.49831, -38.50454, -33.99387, -46.27889, -44.50016, -44.81717, -29.99972, -42.5002]
-elev = [2022, 2369, 3254, 2113, 2165, 2559, 2922, 2631, 2425]
-
-df_gcnet = pd.DataFrame()
-for ii, site in (enumerate(sites)):
-    ds = xr.open_dataset("Data/Vandecrux et al. 2020/" + site + "_T_firn_obs.nc")
-    df = ds.to_dataframe()
-    df = df.reset_index(1).groupby("level").resample("D").mean()
-    df.reset_index(0, inplace=True, drop=True)
-    df.reset_index(inplace=True)
-
-    df_d = pd.DataFrame()
-    df_d["date"] = df.loc[df["level"] == 1, "time"]
-    for i in range(1, 11):
-        df_d["rtd" + str(i)] = df.loc[df["level"] == i, "T_firn"].values
-    for i in range(1, 11):
-        df_d["depth_" + str(i)] = df.loc[df["level"] == i, "Depth"].values
-
-    df_10 = ftl.interpolate_temperature(
-        df_d["date"],
-        df_d[["depth_" + str(i) for i in range(1, 11)]].values,
-        df_d[["rtd" + str(i) for i in range(1, 11)]].values,
-        title=site + " GC-Net",
-    )
-
-    df_10 = df_10.set_index("date").resample("M").mean().reset_index()
-    df_10["site"] = site
-    df_10["latitude"] = lat[ii]
-    df_10["longitude"] = lon[ii]
-    df_10["elevation"] = elev[ii]
-    df_gcnet = pd.concat((df_gcnet, df_10))
-
-df_gcnet[
-    "reference"
-] = "Steffen, K., Box, J.E. and Abdalati, W., 1996. Greenland climate network: GC-Net. US Army Cold Regions Reattach and Engineering (CRREL), CRREL Special Report, pp.98-103."
-
-df_gcnet["reference_short"] = "Steffen et al. (1996)"
-
-df_gcnet["note"] = "as in Vandecrux et al. JoG 2020"
-df_gcnet["depthOfTemperatureObservation"] = 10
-
-df_gcnet["method"] = "thermocouple"
-df_gcnet["durationOpen"] = 0
-df_gcnet["durationMeasured"] = 30 * 24
-df_gcnet["error"] = 0.5
-
-df_all = pd.concat((df_all, 
-    df_gcnet[
-        ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
-    ],
-    ), ignore_index=True,
-)
-
-
-# %% GC-Net other sites
+# %% GC-Net
 print("Loading GC-Net")
 df_GCN = pd.read_csv("Data/GC-Net/10m_firn_temperature.csv")
 df_GCN = df_GCN.loc[df_GCN.temperatureObserved.notnull()]
@@ -452,7 +393,7 @@ df_all = pd.concat((df_all,
     ), ignore_index=True,
 )
 
-# %% Steffen 2001 table
+# %% Steffen 2001 table (that could not be found in the GC-Net AWS data)
 df = pd.read_excel("Data/GC-Net/steffen2001.xlsx")
 df["depthOfTemperatureObservation"] = 10
 df["temperatureObserved"] = df["temperature"]
@@ -473,12 +414,13 @@ df_all = pd.concat((df_all,
 #%% Historical swc
 df_swc = pd.DataFrame()
 df_swc["depthOfTemperatureObservation"] = [10]*3
-df_swc["site"] = ["SwissCamp"]*3
-df_swc["latitude"] = [df.iloc[0,1]]*3
-df_swc["longitude"] = [-df.iloc[0,2]]*3
-df_swc["elevation"] = [3260]*3
+df_swc["site"] = ["Swiss Camp"]*3
+	
+df_swc["latitude"] = [69.57346306]*3
+df_swc["longitude"] = [-49.2955275]*3
+df_swc["elevation"] = [1155]*3
 df_swc["note"] = [""]*3
-df_swc["temperatureObserved"] = [-9.1, -9.3, -0.3]
+df_swc["temperatureObserved"] = [-9.1, -9.3, -9.3]
 df_swc["date"] = pd.to_datetime(["1990-07-01","1990-08-01","1990-08-24" ])
 df_swc["reference_short"] = ["Ohmura et al. (1992)"]*3
 df_swc[
@@ -2126,7 +2068,7 @@ df_all = pd.concat((df_all,
 df = pd.read_excel("Data/Koch Wegener/data.xlsx")
 
 df["depthOfTemperatureObservation"] = 10
-df["date"] = pd.to_datetime(df.date)
+df["date"] = pd.to_datetime(df.date,utc=True)
 df[
     "reference"
 ] = "Koch, Johann P., and Alfred Wegener. Wissenschaftliche Ergebnisse Der Dänischen Expedition Nach Dronning Louises-Land Und Quer über Das Inlandeis Von Nordgrönland 1912 - 13 Unter Leitung Von Hauptmann J. P. Koch : 1 (1930). 1930."
@@ -2178,8 +2120,9 @@ df_all = pd.concat((df_all,
 # %% Checking values
 df_all = df_all.loc[~df_all.temperatureObserved.isnull(), :]
 
-df_ambiguous_date = df_all.loc[pd.to_datetime(df_all.date, errors="coerce").isnull(), :]
+df_ambiguous_date = df_all.loc[pd.to_datetime(df_all.date,utc=True, errors="coerce").isnull(), :]
 df_bad_long = df_all.loc[df_all.longitude.astype(float) > 0, :]
+# df_bad_long.to_csv('bad_lat.csv')
 df_no_coord = df_all.loc[
     np.logical_or(df_all.latitude.isnull(), df_all.latitude.isnull()), :
 ]
@@ -2187,7 +2130,7 @@ df_invalid_depth = df_all.loc[
     pd.to_numeric(df_all.depthOfTemperatureObservation, errors="coerce").isnull(), :
 ]
 df_no_elev = df_all.loc[df_all.elevation.isnull(), :]
-# df_no_elev.to_csv('missing_elev.csv')
+df_no_elev.to_csv('missing_elev.csv')
 
 # %% Removing nan and saving
 tmp = df_all.loc[np.isnan(df_all.temperatureObserved.astype(float).values)]
@@ -2224,7 +2167,7 @@ df = df.loc[~df.elevation.isnull(), :]
 df = df.loc[df.depthOfTemperatureObservation == 10, :]
 df = df.loc[df.temperatureObserved.notnull(), :]
 
-df["date"] = pd.to_datetime(df.date)
+df["date"] = pd.to_datetime(df.date, utc=True)
 df.loc[df.reference_short.isnull(), "reference_short"] = df.loc[
     df.reference_short.isnull(), "reference"
 ]
@@ -2272,6 +2215,10 @@ for ref in df.reference_short.unique():
                 ), ignore_index=True,
             )
 
+df_m.latitude = np.round(df_m.latitude, 5)
+df_m.longitude = np.round(df_m.longitude, 5)
+df_m.temperatureObserved = np.round(df_m.temperatureObserved, 2)
+df_m['date'] = pd.to_datetime(df_m['date'], utc=True).dt.date
 df_m.to_csv("output/10m_temperature_dataset_monthly.csv", index=False)
 
 #%% 
@@ -2279,6 +2226,37 @@ df_m['coeff'] = 1
 df_summary = (df_m.groupby('reference_short')
               .apply(lambda x: x.coeff.sum())
               .reset_index(name='num_measurements'))
+df_summary=df_summary.sort_values('num_measurements')
 explode = 0.5*(df_summary.num_measurements.max() - df_summary.num_measurements)/df_summary.num_measurements.max()
-df_summary.set_index('reference_short').plot.pie(y='num_measurements',explode=explode, figsize=(5, 5))
-plt.legend('off')
+
+fig, ax=plt.subplots(1,1, figsize=(7,10))
+plt.subplots_adjust(bottom=0.4)
+patches, texts = plt.pie( df_summary.num_measurements,
+                         startangle=90,
+                         explode=explode)
+labels = df_summary.reference_short
+sort_legend = True
+if sort_legend:
+    patches, labels, dummy =  zip(*sorted(zip(patches, labels, df_summary.num_measurements),
+                                          key=lambda x: x[2],
+                                          reverse=True))
+
+plt.legend(patches, labels, loc='lower left', bbox_to_anchor=(-.1, -.7),
+           fontsize=8, ncol=3, title='Data origin (listed clock-wise)')
+plt.ylabel('')
+
+plt.savefig('figures/dataset_composition.png',dpi=300)
+
+# %% 
+
+df_summary =(df_m.groupby('reference_short')
+                  .apply(lambda x: x.date.min().year)
+                  .reset_index(name='start_year'))
+df_summary['end_year'] =(df_m.groupby('reference_short')
+                    .apply(lambda x: x.date.max().year)
+                    .reset_index(name='end_year')).end_year
+df_summary['num_measurements'] = (df_m.groupby('reference_short')
+                          .apply(lambda x: x.coeff.sum())
+                          .reset_index(name='num_measurements')).num_measurements
+
+df_summary.sort_values('start_year').to_csv('dataset_composition.csv', index=None)
