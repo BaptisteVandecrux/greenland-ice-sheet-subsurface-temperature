@@ -19,14 +19,7 @@ import xarray as xr
 import time
 
 
-# %% analystical solution to heat diffusion
-# kappa = 0.00114 # m2h-1
-# om = 2*np.pi/24
-# t = np.arange(24)
-# A =3
-# T = A*np.exp(-z * np.sqrt(om/2/kappa) * np.cos(om*t - z*np.sqrt(om/2/kappa) + eps)
-
-# %% Studying clusters
+#loading data
 df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
 import geopandas as gpd
 
@@ -72,12 +65,81 @@ gdf = (
     .to_crs(3413)
 )
 
-land = gpd.GeoDataFrame.from_file("Data/misc/Ice-free_GEUS_GIMP.shp")
-land = land.to_crs("EPSG:3413")
+df['x_3413'] = gdf.geometry.x
+df['y_3413'] = gdf.geometry.y
 
 ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
-ice = ice.to_crs("EPSG:3413")
+land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
+DSA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/DSA_MAR_4326.shp")
+LAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/LAPA_MAR_4326.shp")
+HAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/HAPA_MAR_4326.shp")
+firn = gpd.GeoDataFrame.from_file(
+    "Data/misc/firn areas/FirnLayer2000-2017_final_4326.shp"
+)
 
+df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
+df_10m = df_10m.reset_index()
+df_10m = df_10m.sort_values("year")
+ref_list = df_10m["reference_short"].unique()
+df_10m["ref_id"] = [np.where(ref_list == x)[0] for x in df_10m["reference"]]
+
+import matplotlib
+matplotlib.rcParams.update({"font.size": 14})
+from matplotlib import cm
+from matplotlib import patches as mpatches
+
+# %% spatial distribution plot
+from matplotlib import gridspec
+spec = gridspec.GridSpec(ncols=1, nrows=2,
+                         width_ratios=[1], wspace=0.1,
+                         hspace=0.05 , height_ratios=[3, 1])
+
+fig = plt.figure(figsize=(9, 13))
+ax1 = fig.add_subplot(spec[0])
+box = ax1.get_position()
+box.x0 = box.x0 - 0.2
+box.x1 = box.x1 - 0.2
+ax1.set_position(box)
+land.to_crs("EPSG:3413").plot(ax=ax1, color="k")
+ice.to_crs("EPSG:3413").plot(ax=ax1, color="gray")
+DSA.to_crs("EPSG:3413").plot(ax=ax1, color="tab:blue")
+LAPA.to_crs("EPSG:3413").plot(ax=ax1, color="m")
+HAPA.to_crs("EPSG:3413").plot(ax=ax1, color="tab:red")
+
+ax1.axis("off")
+h = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+h[0] = mpatches.Patch(facecolor="k", label="Land")
+h[1] = mpatches.Patch(facecolor="gray", label="Bare ice area")
+h[2] = mpatches.Patch(facecolor="tab:blue", label="Dry snow area")
+h[3] = mpatches.Patch(facecolor="m", label="Low accumulation\npercolation area")
+h[4] = mpatches.Patch(facecolor="tab:red", label="High accumulation\npercolation area")
+h[5] = plt.plot(np.nan, np.nan,
+    marker="h", color="lightgray", markersize=8, markerfacecolor="k",
+    linestyle="None", label="Observation sites")[0]
+
+ax1.legend(handles=h, bbox_to_anchor=(1.1, 0.5), loc="lower left", 
+           fontsize=14, frameon=False)
+ax1.set_title("(a)", loc='left',fontweight='bold')
+
+hb = ax1.hexbin(df.x_3413, df.y_3413,
+    bins="log", gridsize=(20, 26), mincnt=1,
+    linewidth=0.5, edgecolors="white", cmap="magma")
+cbar_ax = fig.add_axes([0.62, 0.58, 0.2, 0.01])
+cb = plt.colorbar(hb, ax=ax1, cax=cbar_ax, orientation="horizontal")
+cb.ax.get_yaxis().fontsize = 14
+cb.set_label("Number of monthly \n$T_{10m}$ observations", fontsize=12, rotation=0)
+
+ax2 = fig.add_subplot(spec[1])
+ax2.set_title("(b)",loc='left',fontweight='bold')
+ax2.hist(df.date.dt.year.values, density=False, bins=30, alpha=0.7, edgecolor="white")
+ax2.set_yscale('log')
+ax2.set_ylabel('Number of monthly observations')
+ax2.set_xlabel('Year')
+ax2.grid()  
+
+fig.savefig('figures/map.png',dpi=300)
+
+# %% Studying clusters
 fig, ax = plt.subplots(1, 1, figsize=(6, 9))
 fig.subplots_adjust(hspace=0.0, wspace=0.0, top=1, bottom=0, left=0, right=1)
 land.plot(ax=ax, zorder=0, color="black")

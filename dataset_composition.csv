@@ -1,49 +1,49 @@
-reference_short,start_year,end_year,num_measurements
-Koch (1913),1912,1913,5
-Wegener (1930),1930,1930,8
-Heuberger (1954),1950,1950,2
-Benson (1962),1954,1955,59
-Schytt (1955),1954,1954,31
-Nobles (1960),1954,1954,7
-Heuberger  (1954),1954,1954,1
-Meier et al. (1957),1955,1955,4
-Griffiths (1960),1955,1956,38
-"de Quervain, 1969",1957,1964,8
-Langway (1961),1959,1959,14
-Ambach EGIG 1959,1959,1959,2
-Lead Dog (1960),1960,1960,4
-Davies (1954),1960,1960,7
-Davies (1967),1962,1962,1
-Mock and Ragle (1963),1964,1964,31
-Mock (1965),1964,1964,12
-Weertman et al. (1968),1966,1966,1
-Colbeck and Gow (1979),1973,1973,3
-"Clausen et al., 1988",1974,1985,11
-Clausen and Hammer (1988),1977,1977,1
-Stauffer and Oeschger (1979),1978,1978,3
-Clement (1984),1983,1983,4
-Ohmura et al. (1992),1990,1990,3
-Thomsen et al. (1991),1990,1991,8
-Steffen et al. (1996),1991,2022,1752
-Braithwaite (1993),1991,1992,12
-Laternser (1994),1992,1992,16
-Schwager (2000),1994,1994,1
-Steffen et al. (2001),1996,1999,7
-Giese and Hawley (2015),2004,2008,47
-Humphrey et al. (2012),2007,2009,57
-PROMICE,2008,2023,1459
-IMAU,2009,2016,160
-Harrington et al. (2015),2010,2012,5
-Hills et al. (2018),2011,2017,109
-"SIGMA-A, Yamaguchi et al. (2014)",2012,2012,1
-SPLAZ,2012,2013,29
-Miller et al. (2020),2013,2017,68
-Polashenski et al. (2014),2013,2013,2
-"Qanaaq, Tsutaki et al. (2017)",2014,2014,3
-"SIGMA-D, Matoba et al. (2015)",2014,2014,1
-Kjær 2015,2015,2015,2
-MacFerrin et al. (2022),2015,2019,311
-Heilig et al. (2018),2016,2021,58
-Covi et al.,2017,2019,77
-Camp Century Climate,2017,2022,119
-Law et al. (2021),2019,2019,1
+reference_short|start_year|end_year|num_measurements
+Koch (1913)|1912|1913|5
+Wegener (1930)|1930|1930|8
+Heuberger (1954)|1950|1950|2
+Benson (1962)|1954|1955|59
+Schytt (1955)|1954|1954|31
+Nobles (1960)|1954|1954|7
+Heuberger  (1954)|1954|1954|1
+Meier et al. (1957)|1955|1955|4
+Griffiths (1960)|1955|1956|38
+de Quervain (1969)|1957|1964|8
+Ambach (1979)|1959|1959|2
+Langway (1961)|1959|1959|14
+U.S. Army Transportation Board (1960)|1960|1960|4
+Davies (1954)|1960|1960|7
+Davies (1967)|1962|1962|1
+Mock and Ragle (1963)|1964|1964|31
+Mock (1965)|1964|1964|12
+Weertman et al. (1968)|1966|1966|1
+Colbeck and Gow (1979)|1973|1973|3
+Clausen et al. (1988)|1974|1985|11
+Clausen and Hammer (1988)|1977|1977|1
+Stauffer and Oeschger (1979)|1978|1978|3
+Clement (1984)|1983|1983|4
+Thomsen et al. (1991)|1990|1991|8
+Ohmura et al. (1992)|1990|1990|3
+Steffen et al. (1996, 2001, 2023); Vandecrux et al. (2023)|1991|2022|1758
+Braithwaite (1993)|1991|1992|12
+Laternser (1994)|1992|1992|16
+Schwager (2000)|1994|1994|1
+Giese and Hawley (2015)|2004|2008|47
+Humphrey et al. (2012)|2007|2009|57
+Fausto et al. (2021); How et al. (2022)|2008|2023|1480
+Smeets et al. (2018)|2009|2016|160
+Harrington et al. (2015)|2010|2012|5
+Hills et al. (2018)|2011|2017|109
+Yamaguchi et al. (2014)|2012|2012|1
+Charalampidis et al. (2016); Charalampidis et al. (2022) |2012|2013|29
+Polashenski et al. (2014)|2013|2013|2
+Miller et al. (2020)|2013|2017|68
+Qanaaq, Tsutaki et al. (2017)|2014|2014|3
+Matoba et al. (2015)|2014|2014|1
+MacFerrin et al. (2021, 2022)|2015|2019|311
+Kjær et al. (2015)|2015|2015|2
+Heilig et al. (2018)|2016|2021|58
+Covi et al. (2022, 2023)|2017|2019|77
+Camp Century Climate|2017|2022|60
+Vandecrux et al. (2021); Colgan and Vandecrux (2021)|2017|2022|59
+Law et al. (2021)|2019|2019|1

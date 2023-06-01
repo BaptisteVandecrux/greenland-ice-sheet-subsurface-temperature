@@ -13,11 +13,11 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 import xarray as xr
 from scipy.spatial.distance import cdist
-from progressbar import progressbar
-import time
 
 # import GIS_lib as gis
 import matplotlib
+matplotlib.rcParams.update({"font.size": 14})
+
 from rasterio.crs import CRS
 from rasterio.warp import transform
 
@@ -107,10 +107,8 @@ ds_hh["time"] = pd.to_datetime(
     [int(s) for s in np.floor(ds_hh["time"].values)], format="%Y%m%d"
 )
 x, y = transform(
-    {"init": "EPSG:4326"},
-    crs_racmo,
-    ds_hh.lon.values.flatten(),
-    ds_hh.lat.values.flatten(),
+    {"init": "EPSG:4326"}, crs_racmo,
+    ds_hh.lon.values.flatten(), ds_hh.lat.values.flatten(),
 )
 x = np.reshape(x, ds_hh.lon.values.shape)
 x = np.round(x[0, :], 2)
@@ -198,7 +196,6 @@ print("extracting from ANN")
 df = extract_T10m_values(
     ds_ann, df, dim1="longitude", dim2="latitude", name_out="T10m_ANN"
 )
-
 df_save = df.copy()
 
 # %% Plotting RCM performance
@@ -208,69 +205,19 @@ df_10m = df_10m.sort_values("year")
 ref_list = df_10m["reference_short"].unique()
 df_10m["ref_id"] = [np.where(ref_list == x)[0] for x in df_10m["reference"]]
 
-matplotlib.rcParams.update({"font.size": 14})
-from matplotlib import cm
-from matplotlib.colors import Normalize
-from scipy.interpolate import interpn
-import matplotlib.patheffects as pe
-from matplotlib import patches as mpatches
-
-fig, ax_map = plt.subplots(1,1, figsize=(9, 10))
-# ax_map = fig.add_axes([0.01, 0.6, 0.8, 0.4])
-plt.subplots_adjust(left=0.01, bottom=0.1, right=0.7, top=0.95)
-land.to_crs("EPSG:3413").plot(ax=ax_map, color="k")
-ice.to_crs("EPSG:3413").plot(ax=ax_map, color="gray")
-DSA.to_crs("EPSG:3413").plot(ax=ax_map, color="tab:blue")
-LAPA.to_crs("EPSG:3413").plot(ax=ax_map, color="m")
-HAPA.to_crs("EPSG:3413").plot(ax=ax_map, color="tab:red")
-# plt.annotate("A.", (0.01, 0.9), fontsize=12, xycoords="axes fraction")
-
-ax_map.axis("off")
-h = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
-h[0] = mpatches.Patch(facecolor="k", label="Land")
-h[1] = mpatches.Patch(facecolor="gray", label="Bare ice area")
-h[2] = mpatches.Patch(facecolor="tab:blue", label="Dry snow area")
-h[3] = mpatches.Patch(facecolor="m", label="Low accumulation\npercolation area")
-h[4] = mpatches.Patch(facecolor="tab:red", label="High accumulation\npercolation area")
-h[5] = plt.plot(
-    np.nan,
-    np.nan,
-    marker="h",
-    color="lightgray",
-    markersize=8,
-    markerfacecolor="k",
-    linestyle="None",
-    label="Observation sites",
-)[0]
-
-ax_map.legend(
-    handles=h, bbox_to_anchor=(1.1, 0.5), loc="lower left", fontsize=14, frameon=False
-)
-# ax_map.set_title("A. Ice sheet areas")
-
-hb = ax_map.hexbin(df.x_3413, df.y_3413,
-    bins="log", gridsize=(20, 26), mincnt=1,
-    linewidth=0.5, edgecolors="white", cmap="magma")
-cbar_ax = fig.add_axes([0.75, 0.5, 0.1, 0.01])
-cb = plt.colorbar(hb, ax=ax_map, cax=cbar_ax, orientation="horizontal")
-cb.ax.get_yaxis().fontsize = 12
-cb.set_label("Number of monthly \n$T_{10m}$ observations", fontsize=12, rotation=0)
-fig.savefig('figures/map.png',dpi=300)
-
-# %%
-fig, ax = plt.subplots(2, 2, figsize=(14, 10))
+fig, ax = plt.subplots(1, 3, figsize=(16, 6))
 ax = ax.flatten()
 plt.subplots_adjust(left=0.1, bottom=0.1, right=0.97, top=0.95, wspace=0.2, hspace=0.2)
 cmap = matplotlib.cm.get_cmap("tab20b")
-version = ["", "v3.12", "2.3p2", "5"]
+version = ["v3.12", "2.3p2", "5"]
 sym = ["o", "^", "v", "d"]
 
-model_list = ["ANN", "RACMO", "HIRHAM", "MAR"]
+model_list = ["RACMO", "HIRHAM", "MAR"]
 for i, model in enumerate(model_list):
     sym_i = 0
     ax[i].plot(
-        df_10m["T10m_" + model],
         df_10m["temperatureObserved"],
+        df_10m["T10m_" + model],
         marker="+",
         linestyle="none",
         # markeredgecolor="lightgray",
@@ -296,16 +243,16 @@ for i, model in enumerate(model_list):
     if model == "HIRHAM":
         textstr = "\n".join(
             (
-                r"MD = %.2f $^o$C" % (ME,),
-                r"RMSD=%.2f $^o$C" % (RMSE,),
+                r"MD = %.1f °C" % (ME,),
+                r"RMSD=%.1f °C" % (RMSE,),
                 r"N=%.0f" % (np.sum(~np.isnan(df_10m["T10m_" + model])),),
             )
         )
     else:
         textstr = "\n".join(
             (
-                r"MD = %.2f  (%.2f) $^o$C" % (ME, ME2),
-                r"RMSD=%.2f (%.2f) $^o$C" % (RMSE, RMSE2),
+                r"MD = %.1f  (%.1f) °C" % (ME, ME2),
+                r"RMSD=%.1f (%.1f) °C" % (RMSE, RMSE2),
                 r"N=%.0f  (%.0f)"
                 % (
                     np.sum(~np.isnan(df_10m["T10m_" + model])),
@@ -317,7 +264,7 @@ for i, model in enumerate(model_list):
         transform=ax[i].transAxes, fontsize=16, verticalalignment="top")
     t1.set_bbox(dict(facecolor='w', alpha=0.5, edgecolor='w'))
 
-    ax[i].set_title(ABC[i] + ". " + model, loc="left")
+    ax[i].set_title("("+ABC[i].lower() +") " + model, loc="left")
     ax[i].plot([-35, 2], [-35, 2], c="black")
     ax[i].set_xlim(-35, 2)
     ax[i].set_ylim(-35, 2)
@@ -326,7 +273,7 @@ for i, model in enumerate(model_list):
 # Comparison for ablation datasets
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
 df_10m = df_10m.loc[
-    (df_10m["reference_short"].astype(str) == "PROMICE")
+    (df_10m["reference_short"].astype(str) == "Fausto et al. (2021); How et al. (2022)")
     | (df_10m["reference_short"].astype(str) == "Hills et al. (2018)")
     | (df_10m["reference_short"].astype(str) == "Hills et al. (2017)")
     | (df_10m["site"].astype(str) == "SwissCamp"),
@@ -346,8 +293,8 @@ df_10m["ref_id"] = [np.where(ref_list == x)[0] for x in df_10m["reference"]]
 
 for i, model in enumerate(model_list):
     ax[i].plot(
-        df_10m["T10m_" + model],
         df_10m["temperatureObserved"],
+        df_10m["T10m_" + model],
         marker="+",
         linestyle="none",
         # markeredgecolor="lightgray",
@@ -358,8 +305,8 @@ for i, model in enumerate(model_list):
     RMSE = np.sqrt(np.mean((df_10m["T10m_" + model] - df_10m.temperatureObserved) ** 2))
     ME = np.mean(df_10m["T10m_" + model] - df_10m.temperatureObserved)
 
-    textstr = "\n".join((r"$MD=%.2f ^o$C " % (ME,),
-                         r"$RMSD=%.2f ^o$C" % (RMSE,),
+    textstr = "\n".join((r"$MD=%.1f ^o$C " % (ME,),
+                         r"$RMSD=%.1f ^o$C" % (RMSE,),
                          r"$N=%.0f$" % (np.sum(~np.isnan(df_10m["T10m_" + model]))),
                          ))
     t = ax[i].text(0.55, 0.3, "Ablation sites\n" + textstr, transform=ax[i].transAxes,
@@ -367,14 +314,17 @@ for i, model in enumerate(model_list):
     t.set_bbox(dict(facecolor='w', alpha=0.5, edgecolor='w'))
     ax[i].tick_params(axis='both', which='major', labelsize=16)
 
-fig.text(0.5,  0.02,  "Simulated 10 m subsurface temperature ($^o$C)",
+fig.text(0.5,  0.02,  "Observed 10 m subsurface temperature (°C)",
     ha="center", va="center", fontsize=16)
-fig.text(0.03, 0.5, "Observed 10 m subsurface temperature ($^o$C)",
+fig.text(0.03, 0.5, "Simulated 10 m\nsubsurface temperature (°C)",
     ha="center", va="center", rotation="vertical", fontsize=16)
 fig.savefig("figures/model_comp_all_no_legend.png", dpi = 300)
 
 # %% Plotting at selected sites
 from math import sin, cos, sqrt, atan2, radians
+matplotlib.rcParams.update({'font.size': 14})
+
+ds_T10m_std = xr.open_dataset("output/uncertainty/predicted_T10m_std_all.nc")
 
 
 def get_distance(point1, point2):
@@ -398,18 +348,16 @@ all_points = df[["latitude", "longitude"]].values
 site_list = pd.DataFrame(
     np.array(
         [
-            ["CP1", "1955", "2021", 69.91666666666667, -46.93333333333333, 2012.0],
-            ["DYE-2", "1964", "2019", 66.46166666666667, -46.23333333333333, 2100.0],
-            ["Camp Century", "1954", "2019", 77.21833333333333, -61.025, 1834.0],
-            ["Swiss Camp", "1990", "2005", 69.57, -49.3, 1174.0],
+            # ["Saddle", "1998", "2017", 65.99947, -44.50016, 2559.0],
             ["Summit", "1997", "2018", 72.5667, -38.5, 3248.0],
+            ["NASA-E", "2003", "2022", 75.0024,-29.9806,2627.3],
+            ["DYE-2", "1964", "2019", 66.46166666666667, -46.23333333333333, 2100.0],
+            # ["NASA-SE", "1998", "2022", 66.47776999999999, -42.493634, 2385.0],
             ["KAN-U", "2011", "2019", 67.0003, -47.0253, 1840.0],
-            ["NASA-SE", "1998", "2021", 66.47776999999999, -42.493634, 2385.0],
-            ["NASA-U", "2003", "2021", 73.840558, -49.531539, 2340.0],
-            ["Saddle", "1998", "2017", 65.99947, -44.50016, 2559.0],
-            ["THU_U", "1954", "2021", 76.4197, -68.1460, 770],
-            ["French Camp VI", "1950", "2021", 69.706167, -48.344967, 1555.0],
-            ["FA_13", "1950", "2021", 66.181, -39.0435, 1563.0],
+            ["Swiss Camp", "1990", "2005", 69.57, -49.3, 1174.0],
+            ["KPC_U", "1954", "2022", 79.83505, -25.16203, 770],
+            ["SCO_U", "1950", "2022",  72.41602, -27.17758, 996.0],
+            ["FA_13", "1950", "2022", 66.181, -39.0435, 1563.0],
         ]
     )
 )
@@ -424,26 +372,16 @@ site_list["x"], site_list["y"] = transform(
     site_list.lat.astype(float).values,
 )
 site_list["x_mar"], site_list["y_mar"] = transform(
-    {"init": "EPSG:4326"},
-    crs_mar,
+    {"init": "EPSG:4326"},crs_mar,
     site_list.lon.astype(float).values,
     site_list.lat.astype(float).values,
 )
 
-CB_color_cycle = [
-    "#377eb8",
-    "#ff7f00",
-    "#4daf4a",
-    "#f781bf",
-    "#a65628",
-    "#984ea3",
-    "#999999",
-    "#e41a1c",
-    "#dede00",
-]
+CB_color_cycle = ["#377eb8","#4daf4a", "#f781bf",
+    "#a65628", "#984ea3", "#999999", "#e41a1c", "#dede00"]
 
-fig, ax = plt.subplots(6, 2, figsize=(9, 17))
-fig.subplots_adjust(left=0.08, right=0.99, top=0.93, bottom=0.03, hspace=0.25)
+fig, ax = plt.subplots(4, 2, figsize=(10, 11))
+fig.subplots_adjust(left=0.13, right=0.99, top=0.93, bottom=0.03, hspace=0.22)
 ax = ax.flatten()
 
 for i, site in enumerate(site_list.index):
@@ -451,140 +389,71 @@ for i, site in enumerate(site_list.index):
     coords = np.expand_dims(site_list.loc[site, ["lat", "lon"]].values.astype(float), 0)
     dm = cdist(all_points, coords, get_distance)
     df_select = df.loc[dm < 5, :]
-    ax[i].plot(
-        df_select.date,
-        df_select.temperatureObserved,
-        ".",
-        markersize=9,
-        color="k",
-        markeredgecolor="k",
-        linestyle="None",
-        label="observations",
-    )
 
     # plotting ANN
-    df_ANN = ds_ann.T10m.interp(
-        longitude=site_list.loc[site, "lon"],
+    df_ANN = ds_ann.T10m.sel(longitude=site_list.loc[site, "lon"],
         latitude=site_list.loc[site, "lat"],
-        method="linear",
-    ).to_dataframe()
+        method="nearest").to_dataframe().resample("Y").mean()
     df_ANN_interp = np.interp(df_select.date, df_ANN.index, df_ANN.T10m)
     MD = np.sqrt(np.mean((df_ANN_interp - df_select.temperatureObserved) ** 2))
     RMSD = np.mean((df_ANN_interp - df_select.temperatureObserved))
     N = df_select.temperatureObserved.notnull().sum()
-    print("%s, %i, %0.2f, %0.2f" % (site, N, RMSD, MD))
-    # ax[i].fill_between(df_era.index, bs_out[0]-bs_out[1], bs_out[0]+bs_out[1], color = 'lightgray')
-    # df_ANN.T10m.plot(ax=ax[i], color='k', alpha=0.3, label='_no_legend_')
-    df_ANN.T10m.resample("Y").mean().plot(
-        ax=ax[i],
-        drawstyle="steps-post",
-        color=CB_color_cycle[0],
-        linewidth=2,
-        label="ANN",
-    )
+    print("%s, %i, %0.1f, %0.1f" % (site, N, RMSD, MD))
+
+    df_ANN.T10m.plot(ax=ax[i], drawstyle="steps-post",
+        color=CB_color_cycle[0], linewidth=2, label="ANN")
+    
+    # plotting ANN std
+    df_ANN['T10m_std'] = ds_T10m_std.sel(longitude=site_list.loc[site, "lon"],
+        latitude=site_list.loc[site, "lat"],
+        method="nearest").T10m_std.to_dataframe().T10m_std.resample("Y").mean()
+    ax[i].fill_between(df_ANN.index, df_ANN.T10m - df_ANN.T10m_std, 
+        df_ANN.T10m + df_ANN.T10m_std, color="turquoise", step='post', alpha=0.4,
+        label="ANN uncertainty", edgecolor='None', zorder=0)
 
     # plotting RACMO
-    df_racmo = (
-        ds_racmo.T10m.interp(
-            x=site_list.loc[site, "x"], y=site_list.loc[site, "y"], method="linear"
-        )
-        .to_dataframe()
-        .T10m
-        - 273.15
-    )
-    if df_racmo.isnull().all():
-        df_racmo = (
-            ds_racmo.T10m.interp(
-                x=site_list.loc[site, "x"], y=site_list.loc[site, "y"], method="nearest"
-            )
-            .to_dataframe()
-            .T10m
-            - 273.15
-        )
-    # df_racmo.plot(ax=ax[i], color='k', alpha=0.3, label='_no_legend_')
-    df_racmo.resample("Y").mean().plot(
-        ax=ax[i],
-        drawstyle="steps-post",
-        color=CB_color_cycle[1],
-        linewidth=2,
-        label="RACMO",
-    )
+    df_racmo = ds_racmo.T10m.sel(
+            x=site_list.loc[site, "x"], y=site_list.loc[site, "y"], method="nearest"
+        ).to_dataframe().T10m - 273.15
+
+    df_racmo.resample("Y").mean().plot(ax=ax[i], drawstyle="steps-post",
+        color=CB_color_cycle[1], linewidth=2.2, label="RACMO")
 
     # plotting HIRHAM
-    df_hh = (
-        ds_hh.T10m.interp(
-            x=site_list.loc[site, "x"], y=site_list.loc[site, "y"], method="linear"
-        )
-        .to_dataframe()
-        .T10m
-        - 273.15
-    )
-    if df_hh.isnull().all():
-        df_hh = (
-            ds_hh.T10m.interp(
-                x=site_list.loc[site, "x"], y=site_list.loc[site, "y"], method="nearest"
-            )
-            .to_dataframe()
-            .T10m
-        )
-    # df_hh.plot(ax=ax[i], color='k', alpha=0.3, label='_no_legend_')
-    df_hh.resample("Y").mean().plot(
-        ax=ax[i],
-        drawstyle="steps-post",
-        color=CB_color_cycle[2],
-        linewidth=2,
-        label="HIRHAM",
-    )
+    df_hh = ds_hh.T10m.sel(
+            x=site_list.loc[site, "x"], y=site_list.loc[site, "y"], method="nearest"
+        ).to_dataframe().T10m - 273.15
+
+    df_hh.resample("Y").mean().plot(ax=ax[i], drawstyle="steps-post",
+        color=CB_color_cycle[2], linewidth=2.2, label="HIRHAM")
     
     # plotting MAR
-    df_mar = (
-        ds_mar.T10m.interp(
-            x=site_list.loc[site, "x_mar"],
+    df_mar = ds_mar.T10m.sel(x=site_list.loc[site, "x_mar"],
             y=site_list.loc[site, "y_mar"],
-            method="linear",
-        )
-        .to_dataframe()
-        .T10m
-    )
-    if df_mar.isnull().all():
-        df_mar = (
-            ds_mar.T10m.interp(
-                x=site_list.loc[site, "x_mar"],
-                y=site_list.loc[site, "y_mar"],
-                method="nearest",
-            )
-            .to_dataframe()
-            .T10m
-        )
-    # df_mar.plot(ax=ax[i], color='k', alpha=0.3, label='_no_legend_')
-    df_mar.resample("Y").mean().plot(
-        ax=ax[i],
-        drawstyle="steps-post",
-        color=CB_color_cycle[3],
-        linewidth=2,
-        label="MAR",
-    )
-    # ax[i].set_ylim(np.nanmean(bs_out[0])-4, np.nanmean(bs_out[0])+4)
-    ax[i].set_title(ABC[i] + ". " + site, loc="left")
+            method="nearest",
+        ).to_dataframe().T10m
+
+    df_mar.resample("Y").mean().plot(ax=ax[i], drawstyle="steps-post",
+        color=CB_color_cycle[3], linewidth=2, label="MAR")
+    
+    # plotting observations
+    df_select.set_index('date').temperatureObserved.resample('Y').mean().plot(ax=ax[i], marker=".",
+        markersize=14, alpha=0.7, color="tab:orange", markeredgecolor="None",
+        linestyle="None", label="observations")
+    
+    ax[i].set_title("("+ ABC[i].lower() + ") " + site, loc="left", fontsize=14)
     ax[i].grid()
-    ax[i].set_xlim(pd.to_datetime("1950-01-01"), pd.to_datetime("2022-01-01"))
+    ax[i].set_xlim(pd.to_datetime("1950-01-01"), pd.to_datetime("2023-01-01"))
 for i, site in enumerate(site_list.index):
-    if i < 10:
+    if i < 6:
         ax[i].axes.xaxis.set_ticklabels([])
         ax[i].set_xlabel("")
     else:
         ax[i].set_xlabel("Year")
-ax[0].legend(ncol=5, loc="lower right", bbox_to_anchor=(2, 1.13), fontsize=13)
-fig.text(
-    0.02,
-    0.5,
-    "10 m subsurface temperature ($^o$C)",
-    ha="center",
-    va="center",
-    rotation="vertical",
-    fontsize=12,
-)
-fig.savefig("figures/model_comp_selected_sites.png")
+ax[0].legend(ncol=3, loc="lower right", bbox_to_anchor=(1.9, 1.2), fontsize=14)
+fig.text(0.02, 0.45, "10 m subsurface temperature (°C)",
+    ha="center", va="center", rotation="vertical", fontsize=15)
+fig.savefig("figures/figure4.png", dpi=300, bbox_inches='tight')
 
 # %% Preparing input for trend analysis
 ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
@@ -717,19 +586,10 @@ def linregress_3D(x, y):
 # plt.plot(x, y_pred)
 # Answer: 1985-04-01
 
-year_ranges = np.array([[1954, 1985], [1985, 2022], [1954, 2022]])
+year_ranges = np.array([[1954, 1985], [1985, 2023], [1954, 2023]])
 
-CB_color_cycle = [
-    "#377eb8",
-    "#ff7f00",
-    "#4daf4a",
-    "#f781bf",
-    "#a65628",
-    "#984ea3",
-    "#999999",
-    "#e41a1c",
-    "#dede00",
-]
+CB_color_cycle = [ "#377eb8", "#4daf4a",  "#f781bf", "#a65628",  "#984ea3",
+    "#999999",  "#e41a1c", "#dede00"]
 # %% plotting
 import statsmodels.api as sm
 import rioxarray  # for the extension to load
@@ -743,18 +603,10 @@ model = "ANN"
 land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
 land = land.to_crs(ds_T10m.rio.crs)
 
-fig, ax = plt.subplots(2, 3, figsize=(9, 12))
-plt.subplots_adjust(hspace=0.1, wspace=0.1, right=0.8, left=0.01, bottom=0.01, top=0.8)
+fig, ax = plt.subplots(2, 3, figsize=(10, 10))
+plt.subplots_adjust(hspace=0.05, wspace=0.1, right=0.8, left=0.01, bottom=0.01, top=0.95)
 ax = ax.flatten()
-ax_bot = fig.add_axes([0.12, 0.84, 0.87, 0.11])
-ax_bot.set_title(ABC[0] + ". Ice-sheet-wide average", fontweight="bold", loc="left")
-# ax_bot.plot(T10m_GrIS.index, T10m_GrIS,color='lightgray')
-ax_bot.step(
-    T10m_GrIS.resample("Y").mean().index,
-    T10m_GrIS.resample("Y").mean(),
-    color=CB_color_cycle[0],
-    label="ANN",
-)
+
 ds_T10m_dy = ds_T10m.copy()
 ds_T10m_dy["time"] = [toYearFraction(d) for d in pd.to_datetime(ds_T10m_dy.time.values)]
 ds_T10m_dy = ds_T10m_dy.T10m.transpose("time", "y", "x")
@@ -773,31 +625,23 @@ for i in range(3):
     )
     significant = slope.where(pval > 0.1)
     X, Y = np.meshgrid(slope.x, slope.y)
-    ax[i].hexbin(
-        X.reshape(-1),
-        Y.reshape(-1),
+    ax[i].hexbin(X.reshape(-1), Y.reshape(-1),
         significant.data[:, :].reshape(-1),
-        gridsize=(50, 50),
-        hatch="..",
-        alpha=0,
-    )
+        gridsize=(50, 50), hatch="..", alpha=0)
 
     year_start = max(year_ranges[i, 0], int(tmp.time.values.min()))
     year_end = min(year_ranges[i, 1] - 1, int(tmp.time.values.max()))
     if i in [1, 3]:
         if i == 1:
-            cbar_ax = fig.add_axes([0.85, 0.07, 0.03, 0.6])
+            cbar_ax = fig.add_axes([0.85, 0.2, 0.03, 0.6])
         cb = plt.colorbar(im, ax=ax[i], cax=cbar_ax)
         cb.ax.get_yaxis().labelpad = 18
-        cb.set_label(
-            "Trend in 10 m subsurface temperature ($^o$C decade $^{-1}$)",
-            fontsize=14,
-            rotation=270,
-        )
+        cb.set_label("Trend in 10 m subsurface temperature (°C decade $^{-1}$)",
+            fontsize=14, rotation=270)
     ax[i].set_axis_off()
     ax[i].set_title(
-        ABC[i ] + ". ANN, " + str(year_start) + " to " + str(year_end),
-        fontweight="bold",
+        "("+ABC[i].lower() + ") ANN, " + str(year_start) + " to " + str(year_end),
+            fontsize=14,
     )
 
     ax[i].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
@@ -811,7 +655,7 @@ X2 = sm.add_constant(X)
 est = sm.OLS(y, X2)
 est2 = est.fit()
 print(
-    "%s, %i-%i, %0.3f, %0.3f"
+    "%s, %i-%i, %0.1f, %0.1f"
     % (model, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1])
 )
 
@@ -829,10 +673,9 @@ p, e = optimize.curve_fit(piecewise_linear, X, y)
 def f_wrapper_for_odr(beta, x):  # parameter order for odr
     return piecewise_linear(x, *beta)
 
-
-func = scipy.odr.odrpack.Model(f_wrapper_for_odr)
-data = scipy.odr.odrpack.Data(X, y)
-myodr = scipy.odr.odrpack.ODR(data, func, beta0=p, maxit=0)
+func = scipy.odr.Model(f_wrapper_for_odr)
+data = scipy.odr.Data(X, y)
+myodr = scipy.odr.ODR(data, func, beta0=p, maxit=0)
 myodr.set_job(fit_type=2)
 ptatistics = myodr.run()
 df_e = len(X) - len(p)  # degrees of freedom, error
@@ -848,20 +691,10 @@ for i in range(len(p)):
 
 tstat_beta = p / ptatistics.sd_beta  # coeff t-statistics
 pstat_beta = (1.0 - scipy.stats.t.cdf(np.abs(tstat_beta), df_e)) * 2.0  # coef. p-values
-print("%s, %i-%i, %0.3f, %0.3f" % (model, X[0], 1985, p[1] * 10, pstat_beta[1]))
-print("%s, %i-%i, %0.3f, %0.3f" % (model, 1985, X[-1], p[2] * 10, pstat_beta[2]))
+print("%s, %i-%i, %0.1f, %0.3f" % (model, X[0], 1985, p[1] * 10, pstat_beta[1]))
+print("%s, %i-%i, %0.1f, %0.3f" % (model, 1985, X[-1], p[2] * 10, pstat_beta[2]))
 
 y_pred = piecewise_linear(X, *p)
-if model == "ANN":
-    ax_bot.plot(
-        T10m_GrIS.loc[T10m_GrIS.notnull()].index,
-        y_pred,
-        color=CB_color_cycle[0],
-        linestyle="--",
-    )
-ax_bot.autoscale(enable=True, axis="x", tight=True)
-ax_bot.set_ylabel("10 m subsurface \ntemperature ($^o$C)", fontsize=12)
-
 # trend over common period
 X = np.array([toYearFraction(d) for d in T10m_GrIS.loc["1980":"2016"].index])
 y = T10m_GrIS.loc["1980":"2016"].values
@@ -869,7 +702,7 @@ X2 = sm.add_constant(X)
 est = sm.OLS(y, X2)
 est2 = est.fit()
 print(
-    "%s, %i-%i, %0.3f, %0.3f"
+    "%s, %i-%i, %0.1f, %0.3f"
     % (model, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1])
 )
 
@@ -883,13 +716,7 @@ for k in range(len(ds_T10m_l)):
     model = model_l[k]
 
     land = land.to_crs(ds_T10m.rio.crs)
-    ax_bot.step(
-        T10m_GrIS.resample("Y").mean().index,
-        T10m_GrIS.resample("Y").mean(),
-        label=model,
-        color=CB_color_cycle[1 + k],
-        alpha=0.8,
-    )
+
     ds_T10m_dy = ds_T10m.copy()
     ds_T10m_dy["time"] = [
         toYearFraction(d) for d in pd.to_datetime(ds_T10m_dy.time.values)
@@ -904,21 +731,15 @@ for k in range(len(ds_T10m_l)):
         ax=ax[k + 3], vmin=vmin, vmax=vmax, cmap="coolwarm", add_colorbar=False
     )
     X, Y = np.meshgrid(slope.x, slope.y)
-    ax[k + 3].hexbin(
-        X.reshape(-1),
-        Y.reshape(-1),
+    ax[k + 3].hexbin(X.reshape(-1), Y.reshape(-1),
         slope.where(pval > 0.1).data[:, :].reshape(-1),
-        gridsize=(50, 50),
-        hatch="..",
-        alpha=0,
-    )
+        gridsize=(50, 50), hatch="..", alpha=0)
 
     ax[k + 3].set_axis_off()
     ax[k + 3].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
     ax[k + 3].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
-    ax[k + 3].set_title(
-        ABC[k + 3] + ". " + model + ", 1980 to 2016", fontsize=12, fontweight="bold"
-    )
+    ax[k + 3].set_title("("+ABC[k + 3].lower() + ") " + model + ", 1980 to 2016", 
+        fontsize=14)
     # calculating trend on entire period
     X = np.array([toYearFraction(d) for d in T10m_GrIS.loc[T10m_GrIS.notnull()].index])
     y = T10m_GrIS.loc[T10m_GrIS.notnull()].values
@@ -926,10 +747,8 @@ for k in range(len(ds_T10m_l)):
     X2 = sm.add_constant(X)
     est = sm.OLS(y, X2)
     est2 = est.fit()
-    print(
-        "%s, %i-%i, %0.3f, %0.3f"
-        % (model, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1])
-    )
+    print("%s, %i-%i, %0.1f, %0.3f"
+        % (model, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1]) )
 
     # trend over common period
     X = np.array([toYearFraction(d) for d in T10m_GrIS.loc["1980":"2016"].index])
@@ -938,11 +757,10 @@ for k in range(len(ds_T10m_l)):
     est = sm.OLS(y, X2)
     est2 = est.fit()
     print(
-        "%s, %i-%i, %0.3f, %0.3f"
+        "%s, %i-%i, %0.1f, %0.3f"
         % (model, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1])
     )
-ax_bot.legend(ncol=4, loc="upper right", fontsize=12, bbox_to_anchor=(1, 1.35))
-fig.savefig("figures/all_RCMs_trend_map.png", dpi=300)
+fig.savefig("figures/figure6.png", dpi=300)
 
 # %% Firn area averages analysis
 def selected_area(ds, shape, mask=0):
@@ -1002,20 +820,10 @@ ds_hh_BIA = selected_area(ds_hh, firn, mask=1) - 273.15
 #%% Plotting for different firn areas
 import statsmodels.api as sm
 
-CB_color_cycle = [
-    "#377eb8",
-    "#ff7f00",
-    "#4daf4a",
-    "#f781bf",
-    "#a65628",
-    "#984ea3",
-    "#999999",
-    "#e41a1c",
-    "#dede00",
-]
+CB_color_cycle = [ "#377eb8", "#4daf4a",  "#f781bf", "#a65628",  "#984ea3",
+    "#999999",  "#e41a1c", "#dede00"]
 
-
-def plot_selected_ds(tmp_in, ax, label, mask=0):
+def plot_selected_ds(tmp_in, ax, label, mask=0, trend_line=False):
     if label == "ANN":
         col = CB_color_cycle[0]
     elif label == "RACMO":
@@ -1028,69 +836,78 @@ def plot_selected_ds(tmp_in, ax, label, mask=0):
         col = CB_color_cycle[4]
 
     # tmp.plot(ax=ax, color='black', label='_no_legend_',alpha=0.3)
-    tmp = tmp_in.resample("Y").mean()
-    tmp.plot(
+    tmp_in = tmp_in.resample("Y").mean()
+    tmp_in.plot(
         ax=ax, label=label, drawstyle="steps-post", linewidth=3, color=col, alpha=0.8
     )
 
-    # print(tmp.loc['1980-01-01':'1990-01-01'].mean())
-    # print(tmp.loc['2010-01-01':'2020-01-01'].mean())
-    # print(tmp.loc['1998-01-01':'2009-01-01'].mean())
-    # print(tmp.loc['2010-01-01':'2018-01-01'].mean())
+    if label == 'ANN':
+        y1 = [1954, 1985, 1954, 1980]
+        y2 = [1985, 2022, 2022, 2016]
+    else:
+        y1 = [1980]
+        y2 = [2016]
+    # plt.figure()
+    for i in range(len(y1)):
+        tmp = tmp_in.loc[str(y1[i]):str(y2[i])]
+        X = np.array([toYearFraction(d) for d in tmp.index])
+        y = tmp.values
+    
+        X2 = sm.add_constant(X)
+        est = sm.OLS(y, X2)
+        est2 = est.fit()
+            
+        print( "%s, %i-%i, %0.1f, %0.1f, %0.2f"
+            % (label,  X[0], X[-1], tmp.mean(), 
+               est2.params[1] * 10, est2.pvalues[1]))
+        
+        if trend_line & (i<2):
+            tmp = tmp.to_frame()
+            tmp['pred'] = est2.params[1] *X + est2.params[0] 
+            tmp['pred'].plot(ax=ax, zorder=0, color='tab:blue', linestyle="--", label='_nolegend_')
 
-    tmp = tmp.loc["1985":]
-    X = np.array([toYearFraction(d) for d in tmp.index])
-    y = tmp.values
+print('Model, period, mean T10m, slope of T10m (°C decade-1), pvalue')
+fig, ax = plt.subplots(5,1, figsize=(5, 10))
 
-    X2 = sm.add_constant(X)
-    est = sm.OLS(y, X2)
-    est2 = est.fit()
-
-    print(
-        "%s, %i-%i, %0.3f, %0.3f, %0.3f"
-        % (label,  X[0], X[-1], tmp_in.loc['1980':'2016'].mean(), est2.params[1] * 10, est2.pvalues[1])
-    )
-
-print('Model, period, mean T10m, slope of T10m (K decade-1), pvalue')
-fig, ax = plt.subplots(5, 1, figsize=(8, 12))
-fig.subplots_adjust(left=0.15, right=0.98, top=0.93, bottom=0.07, hspace=0.35)
+fig.subplots_adjust(left=0.17, right=0.95, top=0.9, bottom=0.07, hspace=0.22)
 ax = ax.flatten()
 print("all GrIS")
-plot_selected_ds(ds_ann_GrIS, ax[0], "ANN")
+plot_selected_ds(ds_ann_GrIS, ax[0], "ANN", trend_line=True)
 plot_selected_ds(ds_racmo_GrIS, ax[0], "RACMO")
 plot_selected_ds(ds_hh_GrIS, ax[0], "HIRHAM")
 plot_selected_ds(ds_mar_GrIS, ax[0], "MAR")
 # plot_selected_ds(ds_era, firn,ax[0], 'ERA5 $T_{2m}$')
-ax[0].set_title("A. Greenland ice sheet", loc="left", fontsize=14)
-ax[0].legend(ncol=4, bbox_to_anchor=(1, 1.15), loc="lower right", fontsize=14)
+ax[0].set_title("(a) Greenland ice sheet", loc="left", fontsize=14)
+ax[0].legend(ncol=2, bbox_to_anchor=(0.1, 1.18), loc="lower left", fontsize=14)
+
 print("bare ice")
 plot_selected_ds(ds_ann_BIA, ax[1], "ANN")
 plot_selected_ds(ds_racmo_BIA, ax[1], "RACMO")
 plot_selected_ds(ds_hh_BIA, ax[1], "HIRHAM")
 plot_selected_ds(ds_mar_BIA, ax[1], "MAR")
 # plot_selected_ds(ds_era, firn,ax[0], 'ERA5 $T_{2m}$')
-ax[1].set_title("B. Bare ice area", loc="left", fontsize=14)
+ax[1].set_title("(b) Bare ice area", loc="left", fontsize=14)
 print("DSA")
 plot_selected_ds(ds_ann_DSA, ax[2], "ANN")
 plot_selected_ds(ds_racmo_DSA, ax[2], "RACMO")
 plot_selected_ds(ds_hh_DSA, ax[2], "HIRHAM")
 plot_selected_ds(ds_mar_DSA, ax[2], "MAR")
 # plot_selected_ds(ds_era_DSA, ax[2], 'ERA5 $T_{2m}$')
-ax[2].set_title("C. Dry snow area", loc="left", fontsize=14)
+ax[2].set_title("(c) Dry snow area", loc="left", fontsize=14)
 print("LAPA")
 plot_selected_ds(ds_ann_LAPA, ax[3], "ANN")
 plot_selected_ds(ds_racmo_LAPA, ax[3], "RACMO")
 plot_selected_ds(ds_hh_LAPA, ax[3], "HIRHAM")
 plot_selected_ds(ds_mar_LAPA, ax[3], "MAR")
 # plot_selected_ds(ds_era_LAPA, ax[3], 'ERA5 $T_{2m}$')
-ax[3].set_title("D. Low accumulation percolation area", loc="left", fontsize=14)
+ax[3].set_title("(d) Low accumulation percolation area", loc="left", fontsize=14)
 print("HAPA")
 plot_selected_ds(ds_ann_HAPA, ax[4], "ANN")
 plot_selected_ds(ds_racmo_HAPA, ax[4], "RACMO")
 plot_selected_ds(ds_hh_HAPA, ax[4], "HIRHAM")
 plot_selected_ds(ds_mar_HAPA, ax[4], "MAR")
 # plot_selected_ds(ds_era, HAPA, ax[3], 'ERA5 $T_{2m}$')
-ax[4].set_title("E. High accumulation percolation area", loc="left", fontsize=14)
+ax[4].set_title("(e) High accumulation percolation area", loc="left", fontsize=14)
 
 ax[0].set_ylim(-25, -25 + 10)
 ax[1].set_ylim(-16, -16 + 10)
@@ -1102,21 +919,15 @@ for i in range(5):
     ax[i].tick_params(axis="both", labelsize=14)
     ax[i].grid()
 
-    if (i < 4) & (i >0):
+    if (i < 4):
         ax[i].axes.xaxis.set_ticklabels([])
         ax[i].set_xlabel("")
     else:
         ax[i].set_xlabel("Year", fontsize=14)
-fig.text(
-    0.01,
-    0.5,
-    "Average 10 m subsurface temperature ($^o$C)",
-    fontsize=14,
-    va="center",
-    rotation="vertical",
-)
-fig.savefig("figures/model_comp_ice_sheet_areas.png", dpi=300)
-
+fig.text(0.01, 0.5,
+    "Annual 10 m subsurface temperature (°C)",
+    fontsize=14,va="center",rotation="vertical")
+fig.savefig("figures/figure5.png", dpi=300)
 
 # %% comparison with ERA5 temperature: trend difference
 ds_era_m = xr.open_dataset("Data/ERA5/ERA5_monthly_temp_snowfall.nc")
@@ -1160,10 +971,10 @@ labels = [
     "D. 1985-2021 trend difference\n bewteen T10m and Ta2m",
 ]
 units = [
-    "$^o$C decade$^{-1}$",
+    "°C decade$^{-1}$",
     "mm decade$^{-1}$",
-    "$^o$C decade$^{-1}$",
-    "$^o$C decade$^{-1}$",
+    "°C decade$^{-1}$",
+    "°C decade$^{-1}$",
 ]
 #%% plotting
 fig, ax = plt.subplots(1, 4, sharex=True, sharey=True, figsize=(20, 6))
@@ -1229,9 +1040,9 @@ ax = ax.reshape(1,-1)
 plt.subplots_adjust(left=0.01, right=0.9, top =0.9, wspace=0.5)
 for i, y in enumerate(['2012']):
     ds_era_5y.sel(time=y).t2m.plot(ax=ax[i, 0], vmin=-30, vmax=10, cmap='coolwarm',
-                                   cbar_kwargs={'label': '5 year mean $T_{2m}$ from ERA5 ($^o$C)'})
+                                   cbar_kwargs={'label': '5 year mean $T_{2m}$ from ERA5 (°C)'})
     ds_ann_y.sel(time=y).T10m.plot(ax=ax[i, 1], vmin=-30, vmax=10, cmap='coolwarm',
-                                   cbar_kwargs={'label': 'mean $T_{10m}$ from ANN ($^o$C)'})
+                                   cbar_kwargs={'label': 'mean $T_{10m}$ from ANN (°C)'})
     (ds_era_5y.sel(time=y).t2m - ds_ann_y.sel(time=y).T10m.interp_like(
         ds_era_5y.isel(time=0).t2m)
         ).plot(ax=ax[i, 2],

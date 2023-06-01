@@ -366,7 +366,9 @@ df_promice["error"] = 0.2
 df_promice["note"] = ""
 df_promice[
     "reference"
-] = "Fausto, R.S. and van As, D., (2019). Programme for monitoring of the Greenland ice sheet (PROMICE): Automatic weather station data. Version: v03, Dataset published via Geological Survey of Denmark and Greenland. DOI: https://doi.org/10.22008/promice/data/aws"
+] = "Fausto, R. S., van As, D., Mankoff, K. D., Vandecrux, B., Citterio, M., Ahlstrøm, A. P., Andersen, S. B., Colgan, W., Karlsson, N. B., Kjeldsen, K. K., Korsgaard, N. J., Larsen, S. H., Nielsen, S., Pedersen, A. Ø., Shields, C. L., Solgaard, A. M., and Box, J. E.: Programme for Monitoring of the Greenland Ice Sheet (PROMICE) automatic weather station data, Earth Syst. Sci. Data, 13, 3819–3845, https://doi.org/10.5194/essd-13-3819-2021 , 2021. and How, P., Ahlstrøm, A.P., Andersen, S.B., Box, J.E., Citterio, M., Colgan, W.T., Fausto, R., Karlsson, N.B., Jakobsen, J., Larsen, S.H., Mankoff, K.D., Pedersen, A.Ø., Rutishauser, A., Shields, C.L., Solgaard, A.M., van As, D., Vandecrux, B., Wright, P.J., PROMICE and GC-Net automated weather station data in Greenland, https://doi.org/10.22008/FK2/IW73UU, GEUS Dataverse, 2022."
+
+df_promice["reference_short"] = "Fausto et al. (2021); How et al. (2022)"
 
 df_all = pd.concat((df_all, 
     df_promice[
@@ -380,8 +382,10 @@ df_all = pd.concat((df_all,
 print("Loading GC-Net")
 df_GCN = pd.read_csv("Data/GC-Net/10m_firn_temperature.csv")
 df_GCN = df_GCN.loc[df_GCN.temperatureObserved.notnull()]
-df_GCN.reference = "Steffen, K., Box, J.E. and Abdalati, W., 1996. Greenland climate network: GC-Net. US Army Cold Regions Reattach and Engineering (CRREL), CRREL Special Report, pp.98-103."
-df_GCN.reference_short = "Steffen et al. (1996)"
+df_GCN[
+    "reference"
+] = "Steffen, K., Box, J.E. and Abdalati, W., 1996. Greenland climate network: GC-Net. US Army Cold Regions Reattach and Engineering (CRREL), CRREL Special Report, pp.98-103. and Steffen, K. and J. Box: Surface climatology of the Greenland ice sheet: Greenland Climate Network 1995-1999, J. Geophys. Res., 106, 33,951-33,972, 2001 and Steffen, K., Vandecrux, B., Houtz, D., Abdalati, W., Bayou, N., Box, J., Colgan, L., Espona Pernas, L., Griessinger, N., Haas-Artho, D., Heilig, A., Hubert, A., Iosifescu Enescu, I., Johnson-Amin, N., Karlsson, N. B., Kurup, R., McGrath, D., Cullen, N. J., Naderpour, R., Pederson, A. Ø., Perren, B., Philipps, T., Plattner, G.K., Proksch, M., Revheim, M. K., Særrelse, M., Schneebli, M., Sampson, K., Starkweather, S., Steffen, S., Stroeve, J., Watler, B., Winton, Ø. A., Zwally, J., Ahlstrøm, A.: GC-Net Level 1 automated weather station data, https://doi.org/10.22008/FK2/VVXGUT, GEUS Dataverse, V2, 2023. and Vandecrux, B., Box, J.E., Ahlstrøm, A.P., Andersen, S.B., Bayou, N., Colgan, W.T., Cullen, N.J., Fausto, R.S., Haas-Artho, D., Heilig, A., Houtz, D.A., How, P., Iosifescu Enescu , I., Karlsson, N.B., Kurup Buchholz, R., Mankoff, K.D., McGrath, D., Molotch, N.P., Perren, B., Revheim, M.K., Rutishauser, A., Sampson, K., Schneebeli, M., Starkweather, S., Steffen, S., Weber, J., Wright, P.J., Zwally, J., Steffen, K.: The historical Greenland Climate Network (GC-Net) curated and augmented Level 1 dataset, Submitted to ESSD, 2023"
+df_GCN["reference_short"] = "Steffen et al. (1996, 2001, 2023); Vandecrux et al. (2023)"
 df_GCN["method"] = "thermocouple"
 df_GCN["durationOpen"] = 0
 df_GCN["durationMeasured"] = 30 * 24
@@ -401,8 +405,8 @@ df["note"] = "annual average"
 df["date"] = [pd.to_datetime(str(yr) + "-12-01") for yr in df.year]
 df[
     "reference"
-] = "Steffen, K. and J. Box (2001), Surface climatology of the Greenland ice sheet: Greenland Climate Network 1995-1999, J. Geophys. Res., 106, 33,951-33,972"
-df["reference_short"] = "Steffen et al. (2001)"
+] = "Steffen, K., Box, J.E. and Abdalati, W., 1996. Greenland climate network: GC-Net. US Army Cold Regions Reattach and Engineering (CRREL), CRREL Special Report, pp.98-103. and Steffen, K. and J. Box: Surface climatology of the Greenland ice sheet: Greenland Climate Network 1995-1999, J. Geophys. Res., 106, 33,951-33,972, 2001 and Steffen, K., Vandecrux, B., Houtz, D., Abdalati, W., Bayou, N., Box, J., Colgan, L., Espona Pernas, L., Griessinger, N., Haas-Artho, D., Heilig, A., Hubert, A., Iosifescu Enescu, I., Johnson-Amin, N., Karlsson, N. B., Kurup, R., McGrath, D., Cullen, N. J., Naderpour, R., Pederson, A. Ø., Perren, B., Philipps, T., Plattner, G.K., Proksch, M., Revheim, M. K., Særrelse, M., Schneebli, M., Sampson, K., Starkweather, S., Steffen, S., Stroeve, J., Watler, B., Winton, Ø. A., Zwally, J., Ahlstrøm, A.: GC-Net Level 1 automated weather station data, https://doi.org/10.22008/FK2/VVXGUT, GEUS Dataverse, V2, 2023. and Vandecrux, B., Box, J.E., Ahlstrøm, A.P., Andersen, S.B., Bayou, N., Colgan, W.T., Cullen, N.J., Fausto, R.S., Haas-Artho, D., Heilig, A., Houtz, D.A., How, P., Iosifescu Enescu , I., Karlsson, N.B., Kurup Buchholz, R., Mankoff, K.D., McGrath, D., Molotch, N.P., Perren, B., Revheim, M.K., Rutishauser, A., Sampson, K., Schneebeli, M., Starkweather, S., Steffen, S., Weber, J., Wright, P.J., Zwally, J., Steffen, K.: The historical Greenland Climate Network (GC-Net) curated and augmented Level 1 dataset, Submitted to ESSD, 2023"
+df["reference_short"] = "Steffen et al. (1996, 2001, 2023); Vandecrux et al. (2023)"
 df["error"] = 0.5
 df_all = pd.concat((df_all, 
     df[
@@ -631,7 +635,7 @@ for site in sites:
 df_firncover[
     "reference"
 ] = "MacFerrin, M. J., Stevens, C. M., Vandecrux, B., Waddington, E. D., and Abdalati, W. (2022) The Greenland Firn Compaction Verification and Reconnaissance (FirnCover) dataset, 2013–2019, Earth Syst. Sci. Data, 14, 955–971, https://doi.org/10.5194/essd-14-955-2022,"
-df_firncover["reference_short"] = "MacFerrin et al. (2022)"
+df_firncover["reference_short"] = "MacFerrin et al. (2021, 2022)"
 df_firncover["note"] = ""
 df_firncover["depthOfTemperatureObservation"] = 10
 
@@ -695,7 +699,7 @@ for k, note in enumerate(["SPLAZ_main", "SPLAZ_2", "SPLAZ_3"]):
 df_splaz[
     "reference"
 ] = "Charalampidis, C., Van As, D., Colgan, W.T., Fausto, R.S., Macferrin, M. and Machguth, H., 2016. Thermal tracing of retained meltwater in the lower accumulation area of the Southwestern Greenland ice sheet. Annals of Glaciology, 57(72), pp.1-10."
-df_splaz["reference_short"] = "SPLAZ"
+df_splaz["reference_short"] = "Charalampidis et al. (2016); Charalampidis et al. (2022) "
 df_splaz["site"] = site
 df_splaz["depthOfTemperatureObservation"] = 10
 
@@ -1079,7 +1083,7 @@ df_10["note"] = "THM_long, interpolated at 10 m"
 df_10[
     "reference"
 ] = "Vandecrux, B., Colgan, W., Solgaard, A.M., Steffensen, J.P., and Karlsson, N.B.(2021). Firn evolution at Camp Century, Greenland: 1966-2100, Frontiers in Earth Science, https://doi.org/10.3389/feart.2021.578978, 2021 dataset: https://doi.org/10.22008/FK2/SR3O4F"
-df_10["reference_short"] = "Camp Century Climate"
+df_10["reference_short"] = "Vandecrux et al. (2021); Colgan and Vandecrux (2021)"
 df_10["method"] = "thermistors"
 df_10["durationOpen"] = 0
 df_10["durationMeasured"] = 30 * 24
@@ -1269,14 +1273,10 @@ df_dequervain = df_dequervain.rename(
     columns={"depth": "depthOfTemperatureObservation", "temp": "temperatureObserved"}
 )
 df_dequervain["note"] = "as reported in Fischer et al. (1995)"
-df_dequervain[
-    "reference"
-] = "de Quervain, M, 1969. Schneekundliche Arbeiten der Internationalen Glaziologischen Grönlandexpedition (Nivologie). Medd. Grønl. 177(4)"
+df_dequervain["reference"] = "de Quervain, M, 1969. Schneekundliche Arbeiten der Internationalen Glaziologischen Grönlandexpedition (Nivologie). Medd. Grønl. 177(4)"
 df_dequervain["reference_short"] = "de Quervain (1969)"
 
-df_dequervain[
-    "method"
-] = "bimetallic, mercury, Wheastone bridge, platinium resistance thermometers"
+df_dequervain["method"] = "bimetallic, mercury, Wheastone bridge, platinium resistance thermometers"
 df_dequervain["durationOpen"] = 0
 df_dequervain["durationMeasured"] = 0
 df_dequervain["error"] = 0.2
@@ -1291,9 +1291,7 @@ df_all = pd.concat((df_all,
 # %% Larternser EGIG
 df_laternser = pd.read_excel("Data/Laternser 1992/Laternser94.xlsx")
 
-df_laternser[
-    "reference"
-] = "Laternser, M., 1994 Firn temperature measurements and snow pit studies on the EGIG traverse of central Greenland, 1992. Eidgenössische Technische Hochschule.  Versuchsanstalt für Wasserbau  Hydrologie und Glaziologic. (Arbeitsheft 15)."
+df_laternser["reference"] = "Laternser, M., 1994 Firn temperature measurements and snow pit studies on the EGIG traverse of central Greenland, 1992. Eidgenössische Technische Hochschule.  Versuchsanstalt für Wasserbau  Hydrologie und Glaziologic. (Arbeitsheft 15)."
 df_laternser["reference_short"] = "Laternser (1994)"
 
 # interpolating the profiles that do not have 10 m depth
@@ -1446,7 +1444,7 @@ for file in meta.file:
 meta[
     "reference"
 ] = "Ambach, W., Zum Wärmehaushalt des Grönländischen Inlandeises: Vergleichende Studie im Akkumulations- und Ablationsgebiet,  Polarforschung 49 (1): 44-54, 1979"
-meta["reference_short"] = "Ambach EGIG 1959"
+meta["reference_short"] = "Ambach (1979)"
 meta["note"] = "digitized, interpolated at 10 m"
 meta["method"] = "NA"
 meta["durationOpen"] = "NA"
@@ -1465,7 +1463,7 @@ df = pd.read_excel("Data/Kjær/tc-2020-337.xlsx")
 df[
     "reference"
 ] = "Kjær, H. A., Zens, P., Edwards, R., Olesen, M., Mottram, R., Lewis, G., Terkelsen Holme, C., Black, S., Holst Lund, K., Schmidt, M., Dahl-Jensen, D., Vinther, B., Svensson, A., Karlsson, N., Box, J. E., Kipfstuhl, S., and Vallelonga, P.: Recent North Greenland temperature warming and accumulation, The Cryosphere Discuss. [preprint], https://doi.org/10.5194/tc-2020-337 , 2021."
-df["reference_short"] = "Kjær 2015"
+df["reference_short"] = "Kjær et al. (2015)"
 df["note"] = ""
 df["method"] = "thermistor"
 df["durationOpen"] = 0
@@ -1558,8 +1556,8 @@ for site, filename in zip(sites, filenames):
 
     df_10[
         "reference"
-    ] = "Covi, F., Hock, R., Rennermalm, A: Firn temperatures at Dye-2, EKT and Site J"
-    df_10["reference_short"] = "Covi et al."
+    ] = "Covi, F., Hock, R., and Reijmer, C.: Challenges in modeling the energy balance and melt in the percolation zone of the Greenland ice sheet. Journal of Glaciology, 69(273), 164-178. doi:10.1017/jog.2022.54, 2023. and Covi, F., Hock, R., Rennermalm, A., Leidman S., Miege, C., Kingslake, J., Xiao, J., MacFerrin, M., Tedesco, M.: Meteorological and firn temperature data from three weather stations in the percolation zone of southwest Greenland, 2017 - 2019. Arctic Data Center. doi:10.18739/A2BN9X444, 2022."
+    df_10["reference_short"] = "Covi et al. (2022, 2023)"
     df_10["note"] = ""
     df_10["method"] = "thermistor"
     df_10["durationOpen"] = 0
@@ -1760,7 +1758,7 @@ for i, site in enumerate(["s5", "s6", "s9"]):
 df_imau[
     "reference"
 ] = " Paul C. J. P. Smeets, Peter Kuipers Munneke, Dirk van As, Michiel R. van den Broeke, Wim Boot, Hans Oerlemans, Henk Snellen, Carleen H. Reijmer & Roderik S. W. van de Wal (2018) The K-transect in west Greenland: Automatic weather station data (1993–2016), Arctic, Antarctic, and Alpine Research, 50:1, DOI: 10.1080/15230430.2017.1420954"
-df_imau["reference_short"] = "IMAU"
+df_imau["reference_short"] = "Smeets et al. (2018)"
 df_imau["depthOfTemperatureObservation"] = 10
 df_imau["method"] = "thermistor"
 df_imau["durationOpen"] = 0
@@ -2130,7 +2128,8 @@ df_invalid_depth = df_all.loc[
     pd.to_numeric(df_all.depthOfTemperatureObservation, errors="coerce").isnull(), :
 ]
 df_no_elev = df_all.loc[df_all.elevation.isnull(), :]
-df_no_elev.to_csv('missing_elev.csv')
+if len(df_no_elev)>0:
+    df_no_elev.to_csv('missing_elev.csv')
 
 # %% Removing nan and saving
 tmp = df_all.loc[np.isnan(df_all.temperatureObserved.astype(float).values)]
@@ -2221,7 +2220,9 @@ df_m.temperatureObserved = np.round(df_m.temperatureObserved, 2)
 df_m['date'] = pd.to_datetime(df_m['date'], utc=True).dt.date
 df_m.to_csv("output/10m_temperature_dataset_monthly.csv", index=False)
 
-#%% 
+#%% Dataset composition plot and table
+df_m = pd.read_csv("output/10m_temperature_dataset_monthly.csv", parse_dates=['date'])
+
 df_m['coeff'] = 1
 df_summary = (df_m.groupby('reference_short')
               .apply(lambda x: x.coeff.sum())
@@ -2247,7 +2248,6 @@ plt.ylabel('')
 
 plt.savefig('figures/dataset_composition.png',dpi=300)
 
-# %% 
 
 df_summary =(df_m.groupby('reference_short')
                   .apply(lambda x: x.date.min().year)
@@ -2259,4 +2259,4 @@ df_summary['num_measurements'] = (df_m.groupby('reference_short')
                           .apply(lambda x: x.coeff.sum())
                           .reset_index(name='num_measurements')).num_measurements
 
-df_summary.sort_values('start_year').to_csv('dataset_composition.csv', index=None)
+df_summary.sort_values('start_year').to_csv('dataset_composition.csv',sep='|', index=None)
