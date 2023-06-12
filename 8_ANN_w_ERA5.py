@@ -238,12 +238,12 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from sklearn.preprocessing import StandardScaler
 from keras.layers import GaussianNoise
-from tensorflow.keras.wrappers.scikit_learn import KerasRegressor
+from scikeras.wrappers import KerasRegressor
 from sklearn.model_selection import GridSearchCV
 
 def train_ANN(df, Predictors, TargetVariable="temperatureObserved",
               num_nodes = 32, num_layers = 2,
-              epochs = 1000):
+              epochs = 1000, batch_size=200):
 
     w = df["weights"].values
     X = df[Predictors].values
@@ -264,7 +264,7 @@ def train_ANN(df, Predictors, TargetVariable="temperatureObserved",
         model.add(Dense(units=num_nodes, activation="relu"))
     model.add(Dense(1))
     model.compile(loss="mean_squared_error", optimizer="adam")
-    model.fit(X, y, batch_size=200, epochs=epochs, verbose=0, sample_weight=w)
+    model.fit(X, y, batch_size=batch_size, epochs=epochs, verbose=0, sample_weight=w)
     return model, PredictorScalerFit, TargetVarScalerFit
 
 def ANN_predict(df, model, PredictorScalerFit, TargetVarScalerFit):
@@ -289,11 +289,66 @@ def create_model(n_layers, num_nodes):
     return model
 
 # %% Testing the stability of the ANN
-test_stability=0
+test_stability=1
+    
 if test_stability:
-    df_sub = df.loc[np.isin(df.site, ["Swiss Camp", "DYE-2", "KAN_U", "Camp Century", 'KPC_U', 'QAS_U']),:].copy()
-    for epochs in [100, 1000, 5000]:
-        print(epochs, 'epochs')
+    filename="./batch_size_epochs_grid.txt"
+    # f = open(filename, "w")
+    def Msg(txt):
+        f = open(filename, "a")
+        print(txt)
+        f.write(txt + "\n")
+
+    df_train = df.loc[~np.isin(df.site,['NASA-E','SwissCamp','SWC','Swiss Camp', 'NASA-SE','KAN_M']), :].copy()
+    df_test = df.loc[np.isin(df.site,['NASA-E','SwissCamp','SWC','Swiss Camp', 'NASA-SE','KAN_M']), :].copy()
+    df_sub = df.loc[np.isin(df.site, ["Swiss Camp", "DYE-2", "KAN_U", 
+                                      "Camp Century", 'KPC_U', 'QAS_U',
+                                      'NASA-E', 'NASA-SE','KAN_M']),:].copy()
+    for batch_size in [2000, 3000, 4000, 5000]:
+        for epochs in [e for e in range(5,100,5)]+[e for e in range(100,1000,20)]: #:
+            # print(epochs, 'epochs')
+            num_models = 10
+            model = [None]*num_models
+            PredictorScalerFit = [None]*num_models
+            TargetVarScalerFit = [None]*num_models
+            # training the models
+            for i in range(num_models):
+                # print(i)
+                model[i], PredictorScalerFit[i], TargetVarScalerFit[i] = train_ANN(
+                    df_train, Predictors, num_nodes = 32, num_layers=2, epochs=epochs,
+                    batch_size=2000,
+                )
+                df_test['out_mod_'+str(i)] = ANN_predict(
+                    df_test[Predictors], 
+                    model[i], 
+                    PredictorScalerFit[i], 
+                    TargetVarScalerFit[i]).values
+                Msg('%i, %i, %0.2f, %0.2f'%(batch_size, epochs,
+                    (df_test['temperatureObserved'] - df_test['out_mod_'+str(i)]).mean(),
+                    np.sqrt(((df_test['temperatureObserved'] - df_test['out_mod_'+str(i)])**2).mean())))
+            
+
+# %% Testing the stability of the ANN
+test_stability=0
+    
+if test_stability:
+    filename="./epochs_batch_2000.txt"
+    f = open(filename, "w")
+    def Msg(txt):
+        f = open(filename, "a")
+        print(txt)
+        f.write(txt + "\n")
+
+    import matplotlib
+    matplotlib.use('Agg')
+
+    df_train = df.loc[~np.isin(df.site,['NASA-E','SwissCamp','SWC','Swiss Camp', 'NASA-SE','KAN_M']), :].copy()
+    df_test = df.loc[np.isin(df.site,['NASA-E','SwissCamp','SWC','Swiss Camp', 'NASA-SE','KAN_M']), :].copy()
+    df_sub = df.loc[np.isin(df.site, ["Swiss Camp", "DYE-2", "KAN_U", 
+                                      "Camp Century", 'KPC_U', 'QAS_U',
+                                      'NASA-E', 'NASA-SE','KAN_M']),:].copy()
+    for epochs in [e for e in range(50,2000,50)]: #:
+        # print(epochs, 'epochs')
         num_models = 10
         model = [None]*num_models
         PredictorScalerFit = [None]*num_models
@@ -302,11 +357,20 @@ if test_stability:
         for i in range(num_models):
             # print(i)
             model[i], PredictorScalerFit[i], TargetVarScalerFit[i] = train_ANN(
-                df, Predictors, num_nodes = 32, num_layers=2, epochs=epochs,
+                df_train, Predictors, num_nodes = 32, num_layers=2, epochs=epochs,
+                batch_size=2000,
             )
+            df_test['out_mod_'+str(i)] = ANN_predict(
+                df_test[Predictors], 
+                model[i], 
+                PredictorScalerFit[i], 
+                TargetVarScalerFit[i]).values
+            Msg('%s, %0.2f, %0.2f'%(epochs,
+                (df_test['temperatureObserved'] - df_test['out_mod_'+str(i)]).mean(),
+                np.sqrt(((df_test['temperatureObserved'] - df_test['out_mod_'+str(i)])**2).mean())))
             
         #  Plotting model outputs
-        fig, ax = plt.subplots(2, 3, figsize=(10, 10))
+        fig, ax = plt.subplots(3, 3, figsize=(10, 14))
         plt.subplots_adjust(top=0.93,hspace=0.3)
         ax = ax.flatten()
         for k, site in enumerate(df_sub.site.unique()):
@@ -319,7 +383,9 @@ if test_stability:
                 df_sub.loc[df_sub.site == site, 'out_mod_'+str(i)] = ANN_predict(
                     df_sub.loc[df_sub.site == site, Predictors], 
                     model[i], 
-                                                PredictorScalerFit[i], TargetVarScalerFit[i]).values
+                    PredictorScalerFit[i], 
+                    TargetVarScalerFit[i]).values
+
                 df_sub.loc[df_sub.site == site, :]  = df_sub.loc[df_sub.site == site, :] .sort_values('date')
                 ax[k].plot(df_sub.loc[df_sub.site == site, 'date'], 
                            df_sub.loc[df_sub.site == site, 'out_mod_'+str(i)],
@@ -334,16 +400,16 @@ if test_stability:
             ax[k].set_title(site+' ($\overline{\sigma}$= %0.2f °C)'%\
                             df_sub.loc[df_sub.site == site, 
                            ['out_mod_'+str(i) for i in range(5)]].std(axis=1).mean())
-            ax[k].set_ylim(-25, 0)
+            ax[k].set_ylim(-32, 0)
             ax[k].grid()
             for label in ax[k].get_xticklabels():
                   label.set_rotation(45)
                   label.set_ha('right')
-            print('Avg. st. dev. at',site, ': %0.2f'%df_sub.loc[df_sub.site == site, ['out_mod_'+str(i) for i in range(5)]].std(axis=1).mean(), '°C')
+            # print('Avg. st. dev. at',site, ': %0.2f'%df_sub.loc[df_sub.site == site, ['out_mod_'+str(i) for i in range(5)]].std(axis=1).mean(), '°C')
         fig.suptitle(str(epochs)+' epochs')
         ax[0].legend(labelspacing=-0.2)
         
-        fig.savefig('figures/stability_'+str(epochs)+'_epochs.png', dpi=300)
+        fig.savefig('figures/stability_2000_batch_size_'+str(epochs)+'_epochs.png', dpi=300)
 # Average standard deviation between 10 models trained on the same data				
 # epochs        20 	    100 	1000 	5000 	10000 
 # SwissCamp	    0.69	0.58	0.59	0.64	0.57
@@ -353,7 +419,30 @@ if test_stability:
 # KPC_U         0.69	0.52	0.43	0.44	0.36
 # QAS_U	        0.45	0.53	0.37	0.39	0.37
 
+# %% epochs test
+plt.close('all')
+fig, ax = plt.subplots(2,1,figsize=(9,5), sharex=True)
+ls=['-','--',':','-.']
+df_epochs = pd.read_csv('batch_size_epochs_grid.txt',header=None)
+df_epochs.columns=['batch_size','epochs','MD','RMSD']
+tmp = df_epochs.groupby(['batch_size','epochs']).mean()
+tmp[['MD_std','RMSD_std']] = df_epochs.groupby(['batch_size','epochs']).std().mean()
+for batch_size in np.unique(tmp.index.get_level_values('batch_size')):
+    ax[0].errorbar(tmp.loc[batch_size].index, tmp.loc[batch_size, 'MD'],
+                   yerr=tmp.loc[batch_size, 'MD_std'], ls=ls[k],label = 'batch size '+str(batch_size))
+    ax[1].errorbar(tmp.loc[batch_size].index, tmp.loc[batch_size, 'RMSD'],
+                   ls=ls[k], yerr=tmp.loc[batch_size, 'RMSD_std'])
+ax[0].set_ylabel('MD (°C)')
+ax[1].set_ylabel('RMSD (°C)')
+ax[1].set_xlabel('Number of epochs')
+ax[0].set_xlim(0,200)
+ax[0].grid()
+ax[1].grid()
+ax[0].legend(loc="lower center",ncol=2, bbox_to_anchor=(0.5,1))
+fig.savefig('figures/epochs_test.png',dpi=300)
+
 # %% GridSearch
+
 run_gridsearch = 1
 if run_gridsearch:   
     w = df["weights"].values
@@ -369,14 +458,14 @@ if run_gridsearch:
       
     # create model
     model = KerasRegressor(model=create_model, verbose=0,
-                           batch_size = [10, 100, 500, 1000],
-                           epochs = [1000],
+                           batch_size = [5000],
+                           epochs = [100],
                            n_layers=[1, 2, 3], 
                            num_nodes = [16, 32, 64])
     
     # define the grid search parameters
-    param_grid = dict(batch_size = [10, 100, 500, 1000],
-                    epochs = [500, 1000, 1500, 5000],
+    param_grid = dict(batch_size = [5000],
+                    epochs = [100],
                     n_layers=[1, 2, 3], 
                     num_nodes = [16, 32, 64])
     grid = GridSearchCV(estimator = model , param_grid = param_grid, n_jobs=-1, verbose=2)
@@ -400,11 +489,27 @@ if run_gridsearch:
 # batch_size = [10, 50, 100, 200, 500, 1000], epochs = [20, 60, 500],
 # n_layers=[1, 2, 3],  num_nodes = [16, 32, 64]
 # Best: 0.923820 using {'batch_size': 10, 'epochs': 500, 'n_layers': 3, 'num_nodes': 32}
+
+# Gridsearch output for:
+# batch_size = [10, 100, 500, 1000], epochs = [500, 1000, 1500, 5000],
+# n_layers=[1, 2, 3],   num_nodes = [16, 32, 64]
+# Best: 0.868316 using {'batch_size': 500, 'epochs': 5000, 'n_layers': 2, 'num_nodes': 16}
+
+# Gridsearch output for:
+# batch_size = [5000], epochs = [100],
+# n_layers=[1, 2, 3],   num_nodes = [16, 32, 64]
+# Best: 0.765404 using {'batch_size': 5000, 'epochs': 100, 'n_layers': 3, 'num_nodes': 64}
 print(wtf)
 # %% best model
 print('Training model on entire dataset')
 best_model, best_PredictorScalerFit, best_TargetVarScalerFit = train_ANN(
     df, Predictors, num_nodes = 32, num_layers=2, epochs=1000)
+
+# %% evaluating overfitting
+print('Training model on entire dataset')
+for epochs in [100, 500, 1000, 5000, 10000]:
+    model, PredictorScalerFit, TargetVarScalerFit = train_ANN(
+        df, Predictors, num_nodes = 32, num_layers=2, epochs=1000)
 
 # %% Predicting T10m over ERA5 dataset
 predict = 0
@@ -664,9 +769,9 @@ ax1.plot( df_ablation["temperatureObserved"], df_ablation["T10m_" + model],
 RMSE = np.sqrt(np.mean((df_ablation["T10m_" + model] - df_ablation.temperatureObserved) ** 2))
 ME = np.mean(df_ablation["T10m_" + model] - df_ablation.temperatureObserved)
 
-textstr = "\n".join((r"$MD=%.1f ^o$C " % (ME,),
-                     r"$RMSD=%.1f ^o$C" % (RMSE,),
-                     r"$N=%.0f$" % (np.sum(~np.isnan(df_ablation["T10m_" + model]))),
+textstr = "\n".join((r"MD=%.1f °C " % (ME,),
+                     r"RMSD=%.1f °C" % (RMSE,),
+                     r"N=%.0f" % (np.sum(~np.isnan(df_ablation["T10m_" + model]))),
                      ))
 t = ax1.text(0.55, 0.3, "Ablation sites\n" + textstr, transform=ax1.transAxes,
     fontsize=14, verticalalignment="top", color="tab:red")
@@ -702,12 +807,31 @@ ax_map.set_ylim(-3400000, -574000)
 # pos1 = ax_map.get_position()
 # pos2 = [pos1.x0, pos1.y0 + 0.1,  pos1.width, pos1.height] 
 # ax_map.set_position(pos2)
-
+import matplotlib.patheffects as pe
 
 # =============== site examples =======================
 for k, site in enumerate(["NASA-E", "DYE-2", "KAN_L", 'KPC_U',"FA_13"]):
     k = k+6
     print(site)
+    
+    df_site = df.loc[df.site == site, :].iloc[0:1]
+    gdf_site = gpd.GeoDataFrame(df_site,
+                                geometry=gpd.points_from_xy(df_site.longitude,
+                                                            df_site.latitude),
+                                crs="EPSG:4326").to_crs(3413)
+    gdf_site.plot(ax=ax_map, color='w', edgecolor='k')
+    xytext=(5, 3)
+    if site == 'DYE-2': xytext=(-5, 8)
+    if site == 'KAN_L': xytext=(-40, 10)
+    if site == 'FA_13': xytext=(5, -20)
+        
+        
+    for x, y in zip(gdf_site.geometry.x, gdf_site.geometry.y):
+        ax_map.annotate(site, xy=(x, y), xytext=xytext, 
+                        textcoords="offset points",
+                        fontsize=15,
+                        path_effects=[pe.withStroke(linewidth=3, foreground="white")])
+        
     df_select = ds_era.sel(df.loc[df.site == site, ['latitude',
                                                     'longitude']].iloc[0,:].to_dict(),
                            method='nearest').to_dataframe()

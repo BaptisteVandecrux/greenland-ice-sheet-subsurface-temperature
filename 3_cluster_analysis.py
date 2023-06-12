@@ -76,6 +76,7 @@ HAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/HAPA_MAR_4326.shp")
 firn = gpd.GeoDataFrame.from_file(
     "Data/misc/firn areas/FirnLayer2000-2017_final_4326.shp"
 )
+PA = pd.concat([LAPA, HAPA])
 
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
 df_10m = df_10m.reset_index()
@@ -103,24 +104,25 @@ ax1.set_position(box)
 land.to_crs("EPSG:3413").plot(ax=ax1, color="k")
 ice.to_crs("EPSG:3413").plot(ax=ax1, color="gray")
 DSA.to_crs("EPSG:3413").plot(ax=ax1, color="tab:blue")
-LAPA.to_crs("EPSG:3413").plot(ax=ax1, color="m")
-HAPA.to_crs("EPSG:3413").plot(ax=ax1, color="tab:red")
+# LAPA.to_crs("EPSG:3413").plot(ax=ax1, color="m")
+PA.to_crs("EPSG:3413").plot(ax=ax1, color="tab:red")
 
 ax1.axis("off")
-h = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+h = [np.nan, np.nan, np.nan, np.nan, np.nan]
 h[0] = mpatches.Patch(facecolor="k", label="Land")
 h[1] = mpatches.Patch(facecolor="gray", label="Bare ice area")
 h[2] = mpatches.Patch(facecolor="tab:blue", label="Dry snow area")
-h[3] = mpatches.Patch(facecolor="m", label="Low accumulation\npercolation area")
-h[4] = mpatches.Patch(facecolor="tab:red", label="High accumulation\npercolation area")
-h[5] = plt.plot(np.nan, np.nan,
+# h[3] = mpatches.Patch(facecolor="m", label="Low accumulation\npercolation area")
+h[3] = mpatches.Patch(facecolor="tab:red", label="Percolation area")
+h[4] = plt.plot(np.nan, np.nan,
     marker="h", color="lightgray", markersize=8, markerfacecolor="k",
     linestyle="None", label="Observation sites")[0]
 
 ax1.legend(handles=h, bbox_to_anchor=(1.1, 0.5), loc="lower left", 
            fontsize=14, frameon=False)
-ax1.set_title("(a)", loc='left',fontweight='bold')
-
+ax1.text(0.02, 0.95, "(a)" ,
+        transform=ax1.transAxes, fontsize=14, 
+        verticalalignment="top",fontweight='bold')
 hb = ax1.hexbin(df.x_3413, df.y_3413,
     bins="log", gridsize=(20, 26), mincnt=1,
     linewidth=0.5, edgecolors="white", cmap="magma")
@@ -137,30 +139,23 @@ ax2.set_ylabel('Number of monthly observations')
 ax2.set_xlabel('Year')
 ax2.grid()  
 
-fig.savefig('figures/map.png',dpi=300)
+fig.savefig('figures/figure1.png',dpi=300)
 
 # %% Studying clusters
 fig, ax = plt.subplots(1, 1, figsize=(6, 9))
 fig.subplots_adjust(hspace=0.0, wspace=0.0, top=1, bottom=0, left=0, right=1)
 land.plot(ax=ax, zorder=0, color="black")
 ice.plot(ax=ax, zorder=1, color="lightblue")
-gdf.plot(
-    ax=ax,
-    column="year",
-    cmap="tab20c",
-    markersize=50,
-    edgecolor="gray",
-    legend=True,
-    legend_kwds={
-        "label": "Year of measurement",
+gdf.plot(ax=ax, column="year", cmap="tab20c", markersize=50,
+    edgecolor="gray", legend=True,
+    legend_kwds={"label": "Year of measurement",
         "orientation": "horizontal",
-        "shrink": 0.8,
-    },
+        "shrink": 0.8},
 )
 
 
 plt.axis("off")
-plt.savefig("figures/fig1_map.png")
+plt.savefig("figures/cluster_map.png")
 
 from sklearn.cluster import DBSCAN
 

@@ -57,6 +57,7 @@ land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
 DSA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/DSA_MAR_4326.shp")
 LAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/LAPA_MAR_4326.shp")
 HAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/HAPA_MAR_4326.shp")
+PA = pd.concat([LAPA, HAPA])
 firn = gpd.GeoDataFrame.from_file(
     "Data/misc/firn areas/FirnLayer2000-2017_final_4326.shp"
 )
@@ -251,12 +252,12 @@ for i, model in enumerate(model_list):
     else:
         textstr = "\n".join(
             (
-                r"MD = %.1f  (%.1f) °C" % (ME, ME2),
-                r"RMSD=%.1f (%.1f) °C" % (RMSE, RMSE2),
+                r"MD = %.1f  (%.1f) °C" % (ME2, ME),
+                r"RMSD=%.1f (%.1f) °C" % (RMSE2, RMSE),
                 r"N=%.0f  (%.0f)"
                 % (
-                    np.sum(~np.isnan(df_10m["T10m_" + model])),
                     np.sum(df_10m.T10m_HIRHAM.notnull()),
+                    np.sum(~np.isnan(df_10m["T10m_" + model])),
                 ),
             )
         )
@@ -304,12 +305,41 @@ for i, model in enumerate(model_list):
     )
     RMSE = np.sqrt(np.mean((df_10m["T10m_" + model] - df_10m.temperatureObserved) ** 2))
     ME = np.mean(df_10m["T10m_" + model] - df_10m.temperatureObserved)
-
-    textstr = "\n".join((r"$MD=%.1f ^o$C " % (ME,),
-                         r"$RMSD=%.1f ^o$C" % (RMSE,),
-                         r"$N=%.0f$" % (np.sum(~np.isnan(df_10m["T10m_" + model]))),
-                         ))
-    t = ax[i].text(0.55, 0.3, "Ablation sites\n" + textstr, transform=ax[i].transAxes,
+    RMSE2 = np.sqrt(
+        np.mean(
+            (
+                df_10m["T10m_" + model].loc[df_10m.T10m_HIRHAM.notnull()]
+                - df_10m.temperatureObserved.loc[df_10m.T10m_HIRHAM.notnull()]
+            )
+            ** 2
+        )
+    )
+    ME2 = np.mean(
+        df_10m["T10m_" + model].loc[df_10m.T10m_HIRHAM.notnull()]
+        - df_10m.temperatureObserved.loc[df_10m.T10m_HIRHAM.notnull()]
+    )
+    if model == "HIRHAM":
+        textstr = "\n".join(
+            (
+                r"MD = %.1f °C" % (ME,),
+                r"RMSD=%.1f °C" % (RMSE,),
+                r"N=%.0f" % (np.sum(~np.isnan(df_10m["T10m_" + model])),),
+            )
+        )
+    else:
+        textstr = "\n".join(
+            (
+                r"MD = %.1f  (%.1f) °C" % (ME2, ME),
+                r"RMSD=%.1f (%.1f) °C" % (RMSE2, RMSE),
+                r"N=%.0f  (%.0f)"
+                % (
+                    np.sum(df_10m.T10m_HIRHAM.notnull()),
+                    np.sum(~np.isnan(df_10m["T10m_" + model])),
+                ),
+            )
+        )
+    
+    t = ax[i].text(0.42, 0.2, "Ablation sites\n" + textstr, transform=ax[i].transAxes,
         fontsize=16, verticalalignment="top", color="tab:red")
     t.set_bbox(dict(facecolor='w', alpha=0.5, edgecolor='w'))
     ax[i].tick_params(axis='both', which='major', labelsize=16)
@@ -782,26 +812,26 @@ def selected_area(ds, shape, mask=0):
 
 print('clipping ANN')
 ds_ann_DSA = selected_area(ds_ann, DSA)
-ds_ann_LAPA = selected_area(ds_ann, LAPA)
-ds_ann_HAPA = selected_area(ds_ann, HAPA)
+ds_ann_PA = selected_area(ds_ann, PA)
+# ds_ann_HAPA = selected_area(ds_ann, HAPA)
 ds_ann_BIA = selected_area(ds_ann, firn, mask=1)
 
 print('clipping RACMO')
 ds_racmo_DSA = selected_area(ds_racmo, DSA) - 273.15
-ds_racmo_LAPA = selected_area(ds_racmo, LAPA) - 273.15
-ds_racmo_HAPA = selected_area(ds_racmo, HAPA) - 273.15
+ds_racmo_PA = selected_area(ds_racmo, PA) - 273.15
+# ds_racmo_HAPA = selected_area(ds_racmo, HAPA) - 273.15
 ds_racmo_BIA = selected_area(ds_racmo, firn, mask=1) - 273.15
 
 print('clipping MAR')
 ds_mar_DSA = selected_area(ds_mar, DSA)
-ds_mar_LAPA = selected_area(ds_mar, LAPA)
-ds_mar_HAPA = selected_area(ds_mar, HAPA)
+ds_mar_PA = selected_area(ds_mar, PA)
+# ds_mar_HAPA = selected_area(ds_mar, HAPA)
 ds_mar_BIA = selected_area(ds_mar, firn, mask=1)
 
 print('clipping HIRHAM')
 ds_hh_DSA = selected_area(ds_hh, DSA) - 273.15
-ds_hh_LAPA = selected_area(ds_hh, LAPA) - 273.15
-ds_hh_HAPA = selected_area(ds_hh, HAPA) - 273.15
+ds_hh_PA = selected_area(ds_hh, PA) - 273.15
+# ds_hh_HAPA = selected_area(ds_hh, HAPA) - 273.15
 ds_hh_BIA = selected_area(ds_hh, firn, mask=1) - 273.15
 
 
@@ -864,14 +894,14 @@ def plot_selected_ds(tmp_in, ax, label, mask=0, trend_line=False):
         if trend_line & (i<2):
             tmp = tmp.to_frame()
             tmp['pred'] = est2.params[1] *X + est2.params[0] 
-            tmp['pred'].plot(ax=ax, zorder=0, color='tab:blue', linestyle="--", label='_nolegend_')
+            tmp['pred'].plot(ax=ax, zorder=1000, color='tab:blue', alpha=0.7, linestyle="--",lw=2, label='_nolegend_')
 
-print('Model, period, mean T10m, slope of T10m (°C decade-1), pvalue')
-fig, ax = plt.subplots(5,1, figsize=(5, 10))
+print('Model, Period, Mean T10m, Trend in T10m (°C decade-1), p-value')
+fig, ax = plt.subplots(4,1, figsize=(5, 10))
 
-fig.subplots_adjust(left=0.17, right=0.95, top=0.9, bottom=0.07, hspace=0.22)
+fig.subplots_adjust(left=0.2, right=0.95, top=0.89, bottom=0.06, hspace=0.22)
 ax = ax.flatten()
-print("all GrIS")
+print("All Greenland ice sheet")
 plot_selected_ds(ds_ann_GrIS, ax[0], "ANN", trend_line=True)
 plot_selected_ds(ds_racmo_GrIS, ax[0], "RACMO")
 plot_selected_ds(ds_hh_GrIS, ax[0], "HIRHAM")
@@ -880,46 +910,45 @@ plot_selected_ds(ds_mar_GrIS, ax[0], "MAR")
 ax[0].set_title("(a) Greenland ice sheet", loc="left", fontsize=14)
 ax[0].legend(ncol=2, bbox_to_anchor=(0.1, 1.18), loc="lower left", fontsize=14)
 
-print("bare ice")
+print("Bare ice area")
 plot_selected_ds(ds_ann_BIA, ax[1], "ANN")
 plot_selected_ds(ds_racmo_BIA, ax[1], "RACMO")
 plot_selected_ds(ds_hh_BIA, ax[1], "HIRHAM")
 plot_selected_ds(ds_mar_BIA, ax[1], "MAR")
 # plot_selected_ds(ds_era, firn,ax[0], 'ERA5 $T_{2m}$')
 ax[1].set_title("(b) Bare ice area", loc="left", fontsize=14)
-print("DSA")
+print("Dry snow area")
 plot_selected_ds(ds_ann_DSA, ax[2], "ANN")
 plot_selected_ds(ds_racmo_DSA, ax[2], "RACMO")
 plot_selected_ds(ds_hh_DSA, ax[2], "HIRHAM")
 plot_selected_ds(ds_mar_DSA, ax[2], "MAR")
 # plot_selected_ds(ds_era_DSA, ax[2], 'ERA5 $T_{2m}$')
 ax[2].set_title("(c) Dry snow area", loc="left", fontsize=14)
-print("LAPA")
-plot_selected_ds(ds_ann_LAPA, ax[3], "ANN")
-plot_selected_ds(ds_racmo_LAPA, ax[3], "RACMO")
-plot_selected_ds(ds_hh_LAPA, ax[3], "HIRHAM")
-plot_selected_ds(ds_mar_LAPA, ax[3], "MAR")
-# plot_selected_ds(ds_era_LAPA, ax[3], 'ERA5 $T_{2m}$')
-ax[3].set_title("(d) Low accumulation percolation area", loc="left", fontsize=14)
-print("HAPA")
-plot_selected_ds(ds_ann_HAPA, ax[4], "ANN")
-plot_selected_ds(ds_racmo_HAPA, ax[4], "RACMO")
-plot_selected_ds(ds_hh_HAPA, ax[4], "HIRHAM")
-plot_selected_ds(ds_mar_HAPA, ax[4], "MAR")
-# plot_selected_ds(ds_era, HAPA, ax[3], 'ERA5 $T_{2m}$')
-ax[4].set_title("(e) High accumulation percolation area", loc="left", fontsize=14)
+print("Percolation area")
+plot_selected_ds(ds_ann_PA, ax[3], "ANN")
+plot_selected_ds(ds_racmo_PA, ax[3], "RACMO")
+plot_selected_ds(ds_hh_PA, ax[3], "HIRHAM")
+plot_selected_ds(ds_mar_PA, ax[3], "MAR")
+# plot_selected_ds(ds_era_PA, ax[3], 'ERA5 $T_{2m}$')
+ax[3].set_title("(d) Percolation area", loc="left", fontsize=14)
+# print("HAPA")
+# plot_selected_ds(ds_ann_HAPA, ax[4], "ANN")
+# plot_selected_ds(ds_racmo_HAPA, ax[4], "RACMO")
+# plot_selected_ds(ds_hh_HAPA, ax[4], "HIRHAM")
+# plot_selected_ds(ds_mar_HAPA, ax[4], "MAR")
+# # plot_selected_ds(ds_era, HAPA, ax[3], 'ERA5 $T_{2m}$')
+# ax[4].set_title("(e) High accumulation percolation area", loc="left", fontsize=14)
 
 ax[0].set_ylim(-25, -25 + 10)
 ax[1].set_ylim(-16, -16 + 10)
 ax[2].set_ylim(-29, -29 + 10)
-ax[3].set_ylim(-18, -18 + 10)
-ax[4].set_ylim(-15, -15 + 10)
-for i in range(5):
-    ax[i].set_xlim(pd.to_datetime("1954"), pd.to_datetime("2021"))
+ax[3].set_ylim(-17, -17 + 10)
+for i in range(4):
+    ax[i].set_xlim(pd.to_datetime("1950"), pd.to_datetime("2023"))
     ax[i].tick_params(axis="both", labelsize=14)
     ax[i].grid()
 
-    if (i < 4):
+    if (i < 3):
         ax[i].axes.xaxis.set_ticklabels([])
         ax[i].set_xlabel("")
     else:
