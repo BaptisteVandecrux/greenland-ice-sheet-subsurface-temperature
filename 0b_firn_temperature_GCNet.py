@@ -13,7 +13,8 @@ import numpy as np
 import firn_temp_lib as ftl
 
 plt.close('all')
-
+needed_cols = ["date", "site", "latitude", "longitude", "elevation", 
+               "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note"]
 #  all GC-Net stations
 from nead import read
 np.seterr(invalid="ignore")
@@ -26,7 +27,7 @@ plotting = False
 if plotting:
     print('plotting')
     for ID, site in zip(df_info.ID, df_info.Name):   
-        df_aws = read(path_to_GCNet+str(ID).zfill(2)+'-'+site.replace(' ','')+'.csv').to_dataframe()
+        df_aws = read(path_to_GCNet+site.replace(' ','')+'.csv').to_dataframe()
         df_aws['time'] = pd.to_datetime(df_aws.timestamp, utc=True)
         df_aws = df_aws.set_index('time')
         
@@ -92,7 +93,7 @@ if plotting:
 df_gcn = pd.DataFrame()
 
 for ID, site in zip(df_info.ID, df_info.Name):   
-    df_aws = read(path_to_GCNet+str(ID).zfill(2)+'-'+site.replace(' ','')+'_daily.csv').to_dataframe()
+    df_aws = read(path_to_GCNet+'/daily/'+site.replace(' ','')+'_daily.csv').to_dataframe()
     df_aws['time'] = pd.to_datetime(df_aws.timestamp, utc=True)
     df_aws = df_aws.set_index('time')
     print(site)
@@ -121,6 +122,11 @@ for ID, site in zip(df_info.ID, df_info.Name):
     df_gcn = pd.concat((df_gcn, df_10.reset_index()))
 
 df_gcn = df_gcn.loc[df_gcn.temperatureObserved.notnull(), :]
+
+df_gcn[
+    "reference"
+] = "Steffen, K., Box, J.E. and Abdalati, W., 1996. Greenland climate network: GC-Net. US Army Cold Regions Reattach and Engineering (CRREL), CRREL Special Report, pp.98-103. and Steffen, K. and J. Box: Surface climatology of the Greenland ice sheet: Greenland Climate Network 1995-1999, J. Geophys. Res., 106, 33,951-33,972, 2001 and Steffen, K., Vandecrux, B., Houtz, D., Abdalati, W., Bayou, N., Box, J., Colgan, L., Espona Pernas, L., Griessinger, N., Haas-Artho, D., Heilig, A., Hubert, A., Iosifescu Enescu, I., Johnson-Amin, N., Karlsson, N. B., Kurup, R., McGrath, D., Cullen, N. J., Naderpour, R., Pederson, A. Ø., Perren, B., Philipps, T., Plattner, G.K., Proksch, M., Revheim, M. K., Særrelse, M., Schneebli, M., Sampson, K., Starkweather, S., Steffen, S., Stroeve, J., Watler, B., Winton, Ø. A., Zwally, J., Ahlstrøm, A.: GC-Net Level 1 automated weather station data, https://doi.org/10.22008/FK2/VVXGUT, GEUS Dataverse, V2, 2023. and Vandecrux, B., Box, J.E., Ahlstrøm, A.P., Andersen, S.B., Bayou, N., Colgan, W.T., Cullen, N.J., Fausto, R.S., Haas-Artho, D., Heilig, A., Houtz, D.A., How, P., Iosifescu Enescu , I., Karlsson, N.B., Kurup Buchholz, R., Mankoff, K.D., McGrath, D., Molotch, N.P., Perren, B., Revheim, M.K., Rutishauser, A., Sampson, K., Schneebeli, M., Starkweather, S., Steffen, S., Weber, J., Wright, P.J., Zwally, J., Steffen, K.: The historical Greenland Climate Network (GC-Net) curated and augmented Level 1 dataset, Submitted to ESSD, 2023"
+df_gcn["reference_short"] = "Historical GC-Net: Steffen et al. (1996, 2001, 2023); Vandecrux et al. (2023)"
 
 #%% Summit string 2007-2009
 df = pd.read_csv('Data/GC-Net/Summit Snow Thermistors/2007-2009/t_hour.dat', delim_whitespace=True, header=None)
@@ -199,27 +205,12 @@ site = 'Summit'
 df_10["latitude"] = df_info.loc[df_info["Name"] == site, "Northing"].values[0]
 df_10["longitude"] = df_info.loc[df_info["Name"] == site, "Easting"].values[0]
 df_10["elevation"] = df_info.loc[df_info["Name"] == site, "Elevationm"].values[0]
-df_10["reference"] = "GC-Net"
-df_10["reference_short"] = "GC-Net"
-df_10["site"] = site + ''
+df_10["reference"] = "GC-Net unpublished"
+df_10["reference_short"] = "GC-Net unpublished"
+df_10["site"] = site + '_THM'
 df_10["note"] = ''
 df_10["depthOfTemperatureObservation"] = 10
-df_gcn = pd.concat((df_gcn,
-    df_10[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-        ]
-    ]
-))
+df_gcn = pd.concat((df_gcn, df_10[needed_cols]))
 df_save = df.copy()
 
 df = pd.read_csv('Data/GC-Net/Summit Snow Thermistors/2000-2002 thermistor string/2002_sun_00_01_raw.dat', header = None)
@@ -295,27 +286,12 @@ site = 'Summit'
 df_10["latitude"] = df_info.loc[df_info["Name"] == site, "Northing"].values[0]
 df_10["longitude"] = df_info.loc[df_info["Name"] == site, "Easting"].values[0]
 df_10["elevation"] = df_info.loc[df_info["Name"] == site, "Elevationm"].values[0]
-df_10["reference"] = "GC-Net"
-df_10["reference_short"] = "GC-Net"
-df_10["site"] = site + ''
+df_10["reference"] = "GC-Net unpublished"
+df_10["reference_short"] = "GC-Net unpublished"
+df_10["site"] = site + '_THM'
 df_10["note"] = ''
 df_10["depthOfTemperatureObservation"] = 10
-df_gcn = pd.concat((df_gcn,
-    df_10[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-        ]
-    ]
-))
+df_gcn = pd.concat((df_gcn, df_10[needed_cols]))
 
 # %% Swiss Camp TENT thermistor
 import os
@@ -350,34 +326,20 @@ df_swc = df_swc.resample('D').first()
 df_swc[col_temp].plot()
 
 df_10 = df_swc['t_10'].reset_index()
+# Installation depth
+# 	h(1)=-1, h(2)=-2, h(3)=-3, h(4)=-4, h(5)=-5, 	h(6)=-6, 	h(7)=-7, 	h(8)=-8, 	h(9)=-9, 	h(10)=-10, 	h(11)=-11, 	h(12)=-0.75, 	h(13)=-0.5
 df_10 = df_10.rename(columns={'time':'date','t_10':'temperatureObserved'})
 site = 'Swiss Camp'
 df_10["latitude"] = df_info.loc[df_info["Name"] == site, "Northing"].values[0]
 df_10["longitude"] = df_info.loc[df_info["Name"] == site, "Easting"].values[0]
 df_10["elevation"] = df_info.loc[df_info["Name"] == site, "Elevationm"].values[0]
-df_10["reference"] = "GC-Net"
-df_10["reference_short"] = "GC-Net"
-df_10["site"] = site + ''
+df_10["reference"] = "GC-Net unpublished"
+df_10["reference_short"] = "GC-Net unpublished"
+df_10["site"] = site.replace(' ','_') + '_THM'
 df_10["note"] = ''
 df_10["depthOfTemperatureObservation"] = 10
-df_gcn = pd.concat((df_gcn,
-    df_10[
-        [
-            "date",
-            "site",
-            "latitude",
-            "longitude",
-            "elevation",
-            "depthOfTemperatureObservation",
-            "temperatureObserved",
-            "reference",
-            "reference_short",
-            "note",
-        ]
-    ]
-))
+df_gcn = pd.concat((df_gcn, df_10[needed_cols]))
 
 
 # %% print to file
-
 df_gcn.to_csv("Data/GC-Net/10m_firn_temperature.csv")

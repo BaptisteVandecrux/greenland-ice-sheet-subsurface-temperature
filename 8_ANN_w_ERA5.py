@@ -12,62 +12,87 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import geopandas as gpd
 import xarray as xr
-from scipy.spatial.distance import cdist
 import rasterio as rio
 import dask
-import progressbar
-bar = progressbar.ProgressBar()
+
 
 # import GIS_lib as gis
-from progressbar import progressbar
 import matplotlib
 
+# loading T10m dataset
 df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
 df = df.loc[~pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :]
-
 df['date'] = pd.to_datetime(df.date, utc=True).dt.tz_localize(None)
 df["year"] = pd.DatetimeIndex(df.date).year
 df.loc[df.site=='CEN1','site'] = 'Camp Century'  
 df.loc[df.site=='CEN2','site'] = 'Camp Century'   
 df.loc[df.site=='CEN','site'] = 'Camp Century'   
 
-
-land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
+# spatial selection to the contiguous ice sheet
+print(len(df), 'observation in dataset')
 ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
 ice = ice.to_crs("EPSG:3413")
+ice_4326 = ice.to_crs(4326)
+gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.longitude, df.latitude), crs="EPSG:4326")
+ind_in = gpd.sjoin(gdf, ice_4326, predicate='within').index
+
+# ice_4326.plot()
+# gdf.loc[[i for i in gdf.index if i not in ind_in]].plot(color='r', ax=plt.gca())
+
+print(len(df)-len(ind_in), 'observations outside ice sheet mask')
+df = df.loc[ind_in, :]
+
+# temporal selection
+print(((df.date<'1949-12-31') | (df.date>'2022')).sum(),'observations outside of 1950-2023')
+df = df.loc[(df.date>'1949-12-01') & (df.date<'2023'),:]
+
+land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
 
 years = df["year"].values
 years.sort()
 df = df.reset_index(drop=True)
 
-firn_memory = 4
+firn_memory = 5
 Predictors = (
-    ["t2m_amp", "t2m_avg", "sf_avg"]
-    + ["sf_" + str(i) for i in range(firn_memory)]
-    + ["t2m_" + str(i) for i in range(firn_memory)]
+    ["t2m_amp", "t2m_10y_avg", "sf_10y_avg"]
+    + ["sf_anomaly_" + str(i) for i in range(firn_memory)]
+    + ["t2m_anomaly_" + str(i) for i in range(firn_memory)]
     + ["month"]
 )
 
 # Extracting ERA5 data
 print('loading ERA5 data')
-produce_input_grid = 0
+produce_input_grid = 1
 if produce_input_grid:
     with dask.config.set(**{'array.slicing.split_large_chunks': False}):
         ds_era = xr.open_mfdataset(("Data/ERA5/ERA5_monthly_temp_snowfall.nc",
                                     'Data/ERA5/m_era5_t2m_sf_2022_proc.nc')).load()
+    ds_era_1940 = xr.open_dataset('Data/ERA5/ERA5_monthly_temperature_precipitation_1940_1950.nc')[['t2m']]
+    ds_era_1940['sf'] = xr.open_dataset('Data/ERA5/ERA5_monthly_snowfall_1940_1950.nc')['sf']
+    
+    ds_era_1940 = ds_era_1940.interp_like(ds_era.t2m.isel(time=0), method='nearest')
+    ds_era = ds_era.combine_first(ds_era_1940)
+    
+    ds_era = ds_era.interpolate_na(dim = 'latitude', use_coordinate='latitude',
+                          method='nearest', fill_value='extrapolate')
+    ds_era = ds_era.interpolate_na(dim = 'latitude', use_coordinate='latitude',
+                          method='nearest', fill_value='extrapolate')
+
     print('t2m_avg and sf_avg')
-    ds_era["t2m_avg"] = ds_era.t2m.rolling(time=firn_memory*12).mean()
-    ds_era["sf_avg"] = ds_era.sf.rolling(time=firn_memory*12).mean()*12
+    ds_era["t2m_10y_avg"] = ds_era.t2m.rolling(time=10*12).mean()
+    ds_era["sf_10y_avg"] = ds_era.sf.rolling(time=10*12).mean()
+    
     print('t2m_amp')
     ds_era["t2m_amp"] = ds_era.t2m.rolling(time=12).max() - ds_era.t2m.rolling(time=12).min()
+    
     print('t2m_0 and sf_0')    
     ds_era["t2m_0"] = ds_era.t2m.rolling(time=12).mean()
     ds_era["sf_0"] = ds_era.sf.rolling(time=12).mean()*12
     
-    for k in range(1, firn_memory):
-        print(k,'/',firn_memory-1)
-        ds_era["t2m_" + str(k)] = ds_era["t2m_0"].shift(time=12*k)
-        ds_era["sf_" + str(k)]  = ds_era["sf_0"].shift(time=12*k)
+    for k in range(0, firn_memory):
+        print(k+1,'/',firn_memory)
+        ds_era["t2m_anomaly_" + str(k)] = ds_era["t2m_10y_avg"] - ds_era["t2m_0"].shift(time=12*k)
+        ds_era["sf_anomaly_" + str(k)] = ds_era["sf_10y_avg"] - ds_era["sf_0"].shift(time=12*k)
     ds_era['month'] = np.cos((ds_era.time.dt.month-1)/11*2*np.pi)
     
     ds_era = ds_era.rio.write_crs(4326)
@@ -88,7 +113,6 @@ for i in range(firn_memory):
 df["time_era"] = np.nan
 df["t2m_amp"] = np.nan
 
-df = df.loc[(df.date>'1950') & (df.date<'2023'),:]
 
 print("interpolating ERA at the observation sites")
 tmp = ds_era.interp(longitude = xr.DataArray(df.longitude, dims="points"), 
@@ -100,8 +124,8 @@ df[Predictors] = tmp[Predictors].to_dataframe()[Predictors].values
 df["date"] = pd.to_datetime(df.date)
 df["year"] = df["date"].dt.year
 
-df = df.loc[df.t2m_avg.notnull(), :]
-df = df.loc[df.sf_avg.notnull(), :]
+df = df.loc[df.t2m_10y_avg.notnull(), :]
+df = df.loc[df.sf_10y_avg.notnull(), :]
 for i in range(firn_memory):
     df = df.loc[df["sf_" + str(i)].notnull(), :]
     df = df.loc[df["t2m_" + str(i)].notnull(), :]
@@ -124,46 +148,44 @@ bins_amp = np.linspace(0, 50, 15)
 pred_name = (
     [
         "$T_{2m, amp.}$ (K)",
-        "$T_{2m, avg.}$ (last 4 years, K)",
-        "$SF_{avg.}$ (last 4 years, m w.e.)",
+        "$T_{2m, 10 y avg.}$ (K)",
+        "$SF_{annual, 10 y avg.}$ (m w.e.)",
     ]
-    + ["$SF_{avg.}$ (year-%i, m w.e.)" % (i + 1) for i in range(firn_memory)]
-    + ["$T_{2m, avg.}$ (year-%i, K)" % (i + 1) for i in range(firn_memory)]
 )
 
 # first calculating the target histograms (slow)
-Predictors.remove('month')
-target_hist = [None] * len(Predictors)
-for i in range(len(Predictors)):
-    if "t2m" in Predictors[i]:
+pred_list = ["t2m_amp", "t2m_10y_avg", "sf_10y_avg"]
+target_hist = [None] * len(pred_list)
+for i in range(len(pred_list)):
+    if "t2m" in pred_list[i]:
         bins = bins_temp
-    if "amp" in Predictors[i]:
+    if "amp" in pred_list[i]:
         bins = bins_amp
-    if "sf" in Predictors[i]:
+    if "sf" in pred_list[i]:
         bins = bins_sf
-    print(Predictors[i])
-    target_hist[i], _ = np.histogram(ds_era[Predictors[i]].values, bins=bins)
+    print(pred_list[i])
+    target_hist[i], _ = np.histogram(ds_era[pred_list[i]].values, bins=bins)
     target_hist[i] = target_hist[i].astype(np.float32) / target_hist[i].sum()
 
     hist1 = target_hist[i]
-    hist2, _ = np.histogram(df[Predictors[i]].values, bins=bins)
+    hist2, _ = np.histogram(df[pred_list[i]].values, bins=bins)
     weights_bins = 0 * hist1
     weights_bins[hist2 != 0] = hist1[hist2 != 0] / hist2[hist2 != 0]
-    ind = np.digitize(df[Predictors[i]].values, bins)
-    df[Predictors[i] + "_w"] = weights_bins[ind - 1]
-df["weights"] = df[[p + "_w" for p in Predictors]].mean(axis=1)
+    ind = np.digitize(df[pred_list[i]].values, bins)
+    df[pred_list[i] + "_w"] = weights_bins[ind - 1]
+df["weights"] = df[[p + "_w" for p in pred_list]].mean(axis=1)
 
 # % plotting histograms
 for k in range(2):
     fig, ax = plt.subplots(4, 3, figsize=(10, 8))
     fig.subplots_adjust(left=0.06, right=0.99, top=0.99, wspace=0.25, hspace=0.35)
     ax = ax.flatten()
-    for i in range(len(Predictors)):
-        if "t2m" in Predictors[i]:
+    for i in range(len(pred_list)):
+        if "t2m" in pred_list[i]:
             bins = bins_temp
-        if "amp" in Predictors[i]:
+        if "amp" in pred_list[i]:
             bins = bins_amp
-        if "sf" in Predictors[i]:
+        if "sf" in pred_list[i]:
             bins = bins_sf
 
         hist1 = target_hist[i]
@@ -177,10 +199,10 @@ for k in range(2):
             label="ERA5 values for the entire ice sheet",
         )
         if k == 0:
-            hist2, _ = np.histogram(df[Predictors[i]].values, bins=bins)
+            hist2, _ = np.histogram(df[pred_list[i]].values, bins=bins)
         elif k == 1:
             hist2, _ = np.histogram(
-                df[Predictors[i]].values, bins=bins, weights=df["weights"].values
+                df[pred_list[i]].values, bins=bins, weights=df["weights"].values
             )
 
         hist2 = hist2.astype(np.float32) / hist2.sum()
@@ -206,8 +228,8 @@ for k in range(2):
 
         weights_bins = 0 * hist1
         weights_bins[hist2 != 0] = hist1[hist2 != 0] / hist2[hist2 != 0]
-        ind = np.digitize(df[Predictors[i]].values, bins)
-        df[Predictors[i] + "_w"] = weights_bins[ind - 1]
+        ind = np.digitize(df[pred_list[i]].values, bins)
+        df[pred_list[i] + "_w"] = weights_bins[ind - 1]
         ax[i].annotate(
             "MRD: %0.2f"
             % np.mean((hist1[hist2 != 0] - hist2[hist2 != 0]) / hist1[hist2 != 0]),
@@ -227,10 +249,8 @@ for k in range(2):
     ax[i].legend(loc="upper right", bbox_to_anchor=(2.3, 0.9), title=ttl)
     fig.savefig("figures/histograms_" + str(k) + ".png", dpi =300)
     if k == 0:
-        df["weights"] = df[[p + "_w" for p in Predictors]].mean(axis=1)
+        df["weights"] = df[[p + "_w" for p in pred_list]].mean(axis=1)
         
-Predictors.append('month')
-
 # %% ANN functions
 # definition of the useful function to fit an ANN and run the trained model
 import os; os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -289,11 +309,11 @@ def create_model(n_layers, num_nodes):
     return model
 
 # %% Testing the stability of the ANN
-test_stability=1
+test_stability=0
     
 if test_stability:
-    filename="./batch_size_epochs_grid.txt"
-    # f = open(filename, "w")
+    filename="./output/batch_size_epochs_grid.txt"
+    f = open(filename, "w")
     def Msg(txt):
         f = open(filename, "a")
         print(txt)
@@ -304,7 +324,7 @@ if test_stability:
     df_sub = df.loc[np.isin(df.site, ["Swiss Camp", "DYE-2", "KAN_U", 
                                       "Camp Century", 'KPC_U', 'QAS_U',
                                       'NASA-E', 'NASA-SE','KAN_M']),:].copy()
-    for batch_size in [2000, 3000, 4000, 5000]:
+    for batch_size in [100,  200,  500, 1000, 2000, 3000, 4000, 5000]:
         for epochs in [e for e in range(5,100,5)]+[e for e in range(100,1000,20)]: #:
             # print(epochs, 'epochs')
             num_models = 10
@@ -316,7 +336,7 @@ if test_stability:
                 # print(i)
                 model[i], PredictorScalerFit[i], TargetVarScalerFit[i] = train_ANN(
                     df_train, Predictors, num_nodes = 32, num_layers=2, epochs=epochs,
-                    batch_size=2000,
+                    batch_size=batch_size,
                 )
                 df_test['out_mod_'+str(i)] = ANN_predict(
                     df_test[Predictors], 
@@ -326,13 +346,32 @@ if test_stability:
                 Msg('%i, %i, %0.2f, %0.2f'%(batch_size, epochs,
                     (df_test['temperatureObserved'] - df_test['out_mod_'+str(i)]).mean(),
                     np.sqrt(((df_test['temperatureObserved'] - df_test['out_mod_'+str(i)])**2).mean())))
-            
 
+plt.close('all')
+fig, ax = plt.subplots(2,1,figsize=(9,5), sharex=True)
+ls=['-','--',':','-.','-','--',':','-.','-','--',':','-.']
+df_epochs = pd.read_csv('./output/batch_size_epochs_grid.txt',header=None)
+df_epochs.columns=['batch_size','epochs','MD','RMSD']
+tmp = df_epochs.groupby(['batch_size','epochs']).mean()
+tmp[['MD_std','RMSD_std']] = df_epochs.groupby(['batch_size','epochs']).std().mean()
+for k, batch_size in enumerate(np.unique(tmp.index.get_level_values('batch_size'))):
+    ax[0].errorbar(tmp.loc[batch_size].index + k/2 - 2, tmp.loc[batch_size, 'MD'],
+                   yerr=tmp.loc[batch_size, 'MD_std'], ls=ls[k],label = 'batch size '+str(batch_size))
+    ax[1].errorbar(tmp.loc[batch_size].index + k/2 -2, tmp.loc[batch_size, 'RMSD'],
+                   ls=ls[k], yerr=tmp.loc[batch_size, 'RMSD_std'])
+ax[0].set_ylabel('MD (°C)')
+ax[1].set_ylabel('RMSD (°C)')
+ax[1].set_xlabel('Number of epochs')
+ax[0].set_xlim(0,200)
+ax[0].grid()
+ax[1].grid()
+ax[0].legend(loc="lower center",ncol=2, bbox_to_anchor=(0.5,1))
+fig.savefig('figures/epochs_test.png',dpi=300)
 # %% Testing the stability of the ANN
 test_stability=0
     
 if test_stability:
-    filename="./epochs_batch_2000.txt"
+    filename="./output/epochs_sigma.txt"
     f = open(filename, "w")
     def Msg(txt):
         f = open(filename, "a")
@@ -347,7 +386,33 @@ if test_stability:
     df_sub = df.loc[np.isin(df.site, ["Swiss Camp", "DYE-2", "KAN_U", 
                                       "Camp Century", 'KPC_U', 'QAS_U',
                                       'NASA-E', 'NASA-SE','KAN_M']),:].copy()
-    for epochs in [e for e in range(50,2000,50)]: #:
+    for sigma in [0, 0.01, 0.05, 0.1, 0.5]:
+        
+        def train_ANN(df, Predictors, TargetVariable="temperatureObserved",
+                      num_nodes = 32, num_layers = 2,
+                      epochs = 1000, batch_size=200):
+        
+            w = df["weights"].values
+            X = df[Predictors].values
+            y = df[TargetVariable].values.reshape(-1, 1)
+        
+            # Sandardization of data
+            PredictorScalerFit = StandardScaler().fit(X)
+            TargetVarScalerFit = StandardScaler().fit(y)
+        
+            X = PredictorScalerFit.transform(X)
+            y = TargetVarScalerFit.transform(y)
+        
+            # create and fit ANN model
+        
+            model = Sequential()
+            model.add(GaussianNoise(sigma, input_shape=(len(Predictors),)))
+            for i in range(num_layers):
+                model.add(Dense(units=num_nodes, activation="relu"))
+            model.add(Dense(1))
+            model.compile(loss="mean_squared_error", optimizer="adam")
+            model.fit(X, y, batch_size=batch_size, epochs=epochs, verbose=0, sample_weight=w)
+            return model, PredictorScalerFit, TargetVarScalerFit
         # print(epochs, 'epochs')
         num_models = 10
         model = [None]*num_models
@@ -365,7 +430,7 @@ if test_stability:
                 model[i], 
                 PredictorScalerFit[i], 
                 TargetVarScalerFit[i]).values
-            Msg('%s, %0.2f, %0.2f'%(epochs,
+            Msg('%s, %0.2f, %0.2f'%(sigma,
                 (df_test['temperatureObserved'] - df_test['out_mod_'+str(i)]).mean(),
                 np.sqrt(((df_test['temperatureObserved'] - df_test['out_mod_'+str(i)])**2).mean())))
             
@@ -409,7 +474,7 @@ if test_stability:
         fig.suptitle(str(epochs)+' epochs')
         ax[0].legend(labelspacing=-0.2)
         
-        fig.savefig('figures/stability_2000_batch_size_'+str(epochs)+'_epochs.png', dpi=300)
+        fig.savefig('figures/stability test/stability_sigma_'+str(sigma)+'.png', dpi=300)
 # Average standard deviation between 10 models trained on the same data				
 # epochs        20 	    100 	1000 	5000 	10000 
 # SwissCamp	    0.69	0.58	0.59	0.64	0.57
@@ -419,31 +484,9 @@ if test_stability:
 # KPC_U         0.69	0.52	0.43	0.44	0.36
 # QAS_U	        0.45	0.53	0.37	0.39	0.37
 
-# %% epochs test
-plt.close('all')
-fig, ax = plt.subplots(2,1,figsize=(9,5), sharex=True)
-ls=['-','--',':','-.']
-df_epochs = pd.read_csv('batch_size_epochs_grid.txt',header=None)
-df_epochs.columns=['batch_size','epochs','MD','RMSD']
-tmp = df_epochs.groupby(['batch_size','epochs']).mean()
-tmp[['MD_std','RMSD_std']] = df_epochs.groupby(['batch_size','epochs']).std().mean()
-for batch_size in np.unique(tmp.index.get_level_values('batch_size')):
-    ax[0].errorbar(tmp.loc[batch_size].index, tmp.loc[batch_size, 'MD'],
-                   yerr=tmp.loc[batch_size, 'MD_std'], ls=ls[k],label = 'batch size '+str(batch_size))
-    ax[1].errorbar(tmp.loc[batch_size].index, tmp.loc[batch_size, 'RMSD'],
-                   ls=ls[k], yerr=tmp.loc[batch_size, 'RMSD_std'])
-ax[0].set_ylabel('MD (°C)')
-ax[1].set_ylabel('RMSD (°C)')
-ax[1].set_xlabel('Number of epochs')
-ax[0].set_xlim(0,200)
-ax[0].grid()
-ax[1].grid()
-ax[0].legend(loc="lower center",ncol=2, bbox_to_anchor=(0.5,1))
-fig.savefig('figures/epochs_test.png',dpi=300)
-
 # %% GridSearch
 
-run_gridsearch = 1
+run_gridsearch = 0
 if run_gridsearch:   
     w = df["weights"].values
     X = df[Predictors].values
@@ -499,7 +542,7 @@ if run_gridsearch:
 # batch_size = [5000], epochs = [100],
 # n_layers=[1, 2, 3],   num_nodes = [16, 32, 64]
 # Best: 0.765404 using {'batch_size': 5000, 'epochs': 100, 'n_layers': 3, 'num_nodes': 64}
-print(wtf)
+# print(wtf)
 # %% best model
 print('Training model on entire dataset')
 best_model, best_PredictorScalerFit, best_TargetVarScalerFit = train_ANN(
@@ -524,9 +567,13 @@ if predict:
     out = ANN_predict(tmp, best_model, best_PredictorScalerFit, best_TargetVarScalerFit)
 
     ds_T10m =  out.to_frame().to_xarray()["temperaturePredicted"].sortby(['time','latitude','longitude'])
-
-    ds_T10m.rename('T10m').to_netcdf("output/predicted_T10m.nc")
-ds_T10m = xr.open_dataset("output/predicted_T10m.nc")["T10m"]
+    ds_T10m = ds_T10m.rio.write_crs(4326).rio.clip(ice.to_crs(4326).geometry).rename('T10m')
+    ds_T10m.attrs['author'] = 'Baptiste Vandecrux'
+    ds_T10m.attrs['contact'] = 'bav@geus.dk'
+    ds_T10m.attrs['description'] = 'Monthly grids of Greenland ice sheet 10 m subsurface temperature for 1954-2022 as predicted by an artifical neural network trained on more than 4500 in situ observations and using ERA5 snowfall and air temperature as input.'
+    ds_T10m.to_netcdf("output/T10m_prediction.nc")
+    
+ds_T10m = xr.open_dataset("output/T10m_prediction.nc")["T10m"]
 
 
 # %% spatial cross-validation:
@@ -540,6 +587,7 @@ gdf = gpd.GeoDataFrame(
 ).set_crs(4326)
 points_within = gpd.sjoin(gdf, zwally, op="within")
 df["zwally_zone"] = np.nan
+df["T10m_pred_unseen"] = np.nan
 model_list = [None] * zwally.shape[0]
 PredictorScalerFit_list = [None] * zwally.shape[0]
 TargetVarScalerFit_list = [None] * zwally.shape[0]
@@ -557,6 +605,13 @@ for i in range(zwally.shape[0]):
                                            num_nodes = 32, 
                                            num_layers=2, 
                                            epochs=1000)
+    # saving the model estimate for the unseen data
+    df_unseen = df.loc[df.zwally_zone == i, :].copy()
+
+    df.loc[df.zwally_zone == i,"T10m_pred_unseen"] = ANN_predict(df_unseen[Predictors],
+                                              model_list[i],
+                                              PredictorScalerFit_list[i],
+                                              TargetVarScalerFit_list[i])
 
 # defining function that makes the ANN estimate from predictor raw values
 df = df.sort_values("date")
@@ -615,13 +670,18 @@ if predict:
                 )
     
         ds_T10m_std.to_netcdf("output/uncertainty/predicted_T10m_std_"+str(year)+".nc")
-    ds_T10m_std = xr.open_mfdataset(["output/uncertainty/predicted_T10m_std_"+str(year)+".nc" for year in range(1954,2023)])
+    ds_T10m_std = xr.open_mfdataset(
+        ["output/uncertainty/predicted_T10m_std_"+str(year)+".nc" for year in range(1954,2023)])
     ds_T10m_std = ds_T10m_std.rio.write_crs(4326)
     ice_4326 = ice.to_crs(4326)
     msk = ds_T10m_std.T10m_std.isel(time=0).rio.clip(ice_4326.geometry, ice_4326.crs)
     ds_T10m_std = ds_T10m_std.where(msk.notnull())
-    ds_T10m_std.to_netcdf("output/uncertainty/predicted_T10m_std_all.nc")
-ds_T10m_std = xr.open_dataset("output/uncertainty/predicted_T10m_std_all.nc")
+
+    ds_T10m_std.attrs['author'] = 'Baptiste Vandecrux'
+    ds_T10m_std.attrs['contact'] = 'bav@geus.dk'
+    ds_T10m_std.attrs['description'] = 'Monthly grids of the uncertainty of the ANN Greenland ice sheet 10 m subsurface temperature for 1954-2022 calculated from the standard deviation between the predictions of 10 spatial cross-validation models.'
+    ds_T10m_std.to_netcdf("output/T10m_uncertainty.nc")
+ds_T10m_std = xr.open_dataset("output/T10m_uncertainty.nc")['T10m_std']
 
 #%% checking that CV std
 fig, ax = plt.subplots(4, 3, figsize=(15, 15))
@@ -700,96 +760,101 @@ df = extract_T10m_values(
     ds_T10m.to_dataset(), df, dim1="longitude", dim2="latitude", name_out="T10m_ANN"
 )
 
-# %% 
+# %% Plotting Figure 2
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
 
 plt.close('all')
-matplotlib.rcParams.update({'font.size': 14})
+matplotlib.rcParams.update({'font.size': 13})
 df.loc[df.site=='NAE','site'] = 'NASA-E'
 df.loc[df.site=='SWC','site'] = 'Swiss Camp'
 df.loc[df.site=='DY2','site'] = 'DYE-2'
 abc='abcdefghijklmno'
 
-fig, ax = plt.subplots(11, 1, figsize=(10, 13),sharex=(True))
+fig, ax = plt.subplots(11, 1, figsize=(10, 14),sharex=(True))
 ax = ax.flatten()
-plt.subplots_adjust(hspace=0.05, top = 1,bottom=0.05, left =0.12,right=0.9)
+plt.subplots_adjust(hspace=0.06, top = 1,bottom=0.05, left =0.12,right=0.9)
 for k in range(5):
     ax[k].set_axis_off()
 
 # =============== scatterplot =======================
-ax1 = plt.subplot(2,2,1)
-version = ["", "v3.12", "2.3p2", "5"]
-model = "ANN"
-
-ax1.plot(
-    df_10m["temperatureObserved"],
-    df_10m["T10m_" + model],
-    marker="+",
-    linestyle="none",
-    # markeredgecolor="lightgray",
-    markeredgewidth=0.5,
-    markersize=5,
-    color="k",
-)
-RMSE = np.sqrt(np.mean((df_10m["T10m_" + model] - df_10m.temperatureObserved) ** 2))
-ME = np.mean(df_10m["T10m_" + model] - df_10m.temperatureObserved)
-if ME<0.05:
-    ME=abs(ME)
-textstr = "\n".join(
-    (
-        r"MD = %.1f °C" % (ME,),
-        r"RMSD=%.1f °C" % (RMSE,),
-        r"N=%.0f" % (np.sum(~np.isnan(df_10m["T10m_" + model])),),
+for ax1, model in zip( [plt.subplot(4,2,1), plt.subplot(4,2,3)],
+                      ["ANN", "pred_unseen"]):
+    ax1.plot(
+        df_10m["temperatureObserved"],
+        df_10m["T10m_" + model],
+        marker="+",
+        linestyle="none",
+        # markeredgecolor="lightgray",
+        markeredgewidth=0.5,
+        markersize=5,
+        color="k",
     )
-)
+    RMSE = np.sqrt(np.mean((df_10m["T10m_" + model] - df_10m.temperatureObserved) ** 2))
+    ME = np.mean(df_10m["T10m_" + model] - df_10m.temperatureObserved)
+    if ME<0.05:
+        ME=abs(ME)
+    textstr = "\n".join(
+        (
+            r"MD = %.1f °C" % (ME,),
+            r"RMSD=%.1f °C" % (RMSE,),
+            r"N=%.0f" % (np.sum(~np.isnan(df_10m["T10m_" + model])),),
+        )
+    )
+    
+    t1 = ax1.text(0.02, 0.95, "All sites\n" + textstr,
+        transform=ax1.transAxes, fontsize=13, verticalalignment="top")
+    t1.set_bbox(dict(facecolor='w', alpha=0.3, edgecolor='w'))
+    
+    if model == "ANN":
+        ax1.set_title("(a) best ANN model vs. its training data", loc="left",fontsize=13)
+        pos1 = ax1.get_position()
+        pos2 = [pos1.x0, pos1.y0+0.03,  pos1.width*1.1, pos1.height*0.7] 
+        ax1.set_position(pos2)
+    else:
+        ax1.set_title("(b) CV ANN models vs. their unseen data", loc="left",fontsize=13)
+        pos1 = ax1.get_position()
+        pos2 = [pos1.x0, pos1.y0+0.04,  pos1.width*1.1, pos1.height*0.7] 
+        ax1.set_position(pos2)
+    ax1.plot([-35, 2], [-35, 2], c="black")
+    ax1.set_xlim(-35, 2)
+    ax1.set_ylim(-35, 2)
+    ax1.grid()
+    
+    # Comparison for ablation datasets
+    df_ablation = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
+    df_ablation = df_ablation.loc[
+        np.isin(df.site, ['KPC_L', 'SCO_U', 'KAN_L', 'KPC_U', 'SCO_L', 'QAS_U', 'NUK_U',
+               'UPE_L', 'UPE_U', 'NUK_L', 'TAS_L', 'KAN_M', 'THU_L', 'TAS_U',
+               'T-11b', 'THU_U', 'T-11a', 'T-14', 'TAS_A', 'T-15a', 'T-15b',
+               'T-16', 'QAS_M', 'T-15c', 'THU_U2', 'Swiss Camp','SwissCamp',
+               'QAS_Uv3', 'KPC_Uv3', 'SWC_O', 'JAR_O']),:]
+    
+    ax1.plot( df_ablation["temperatureObserved"], df_ablation["T10m_" + model],
+        marker="+", linestyle="none", markeredgewidth=0.5, 
+        markersize=5, color="tab:red",
+    )
+    RMSE = np.sqrt(np.mean((df_ablation["T10m_" + model] - df_ablation.temperatureObserved) ** 2))
+    ME = np.mean(df_ablation["T10m_" + model] - df_ablation.temperatureObserved)
+    
+    textstr = "\n".join((r"MD=%.1f °C " % (ME,),
+                         r"RMSD=%.1f °C" % (RMSE,),
+                         r"N=%.0f" % (np.sum(~np.isnan(df_ablation["T10m_" + model]))),
+                         ))
+    t = ax1.text(0.63, 0.4, "Ablation sites\n" + textstr, transform=ax1.transAxes,
+        fontsize=13, verticalalignment="top", color="tab:red")
+    t.set_bbox(dict(facecolor='w', alpha=0.3, edgecolor='w'))
+    ax1.tick_params(axis='both', which='major', labelsize=14)
+    
+    ax1.set_xlabel("Observed $T_{10m}$ (°C)")
+    ax1.set_ylabel("Predicted $T_{10m}$ (°C)")
 
-t1 = ax1.text(0.02, 0.95, "All sites\n" + textstr,
-    transform=ax1.transAxes, fontsize=14, verticalalignment="top")
-t1.set_bbox(dict(facecolor='w', alpha=0.5, edgecolor='w'))
-
-ax1.set_title("(a) " + model, loc="left",fontsize=14)
-ax1.plot([-35, 2], [-35, 2], c="black")
-ax1.set_xlim(-35, 2)
-ax1.set_ylim(-35, 2)
-ax1.grid()
-
-# Comparison for ablation datasets
-df_ablation = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
-df_ablation = df_ablation.loc[
-    np.isin(df.site, ['KPC_L', 'SCO_U', 'KAN_L', 'KPC_U', 'SCO_L', 'QAS_U', 'NUK_U',
-           'UPE_L', 'UPE_U', 'NUK_L', 'TAS_L', 'KAN_M', 'THU_L', 'TAS_U',
-           'T-11b', 'THU_U', 'T-11a', 'T-14', 'TAS_A', 'T-15a', 'T-15b',
-           'T-16', 'QAS_M', 'T-15c', 'THU_U2', 'Swiss Camp','SwissCamp',
-           'QAS_Uv3', 'KPC_Uv3', 'SWC_O', 'JAR_O']),:]
-
-ax1.plot( df_ablation["temperatureObserved"], df_ablation["T10m_" + model],
-    marker="+", linestyle="none", markeredgewidth=0.5, 
-    markersize=5, color="tab:red",
-)
-RMSE = np.sqrt(np.mean((df_ablation["T10m_" + model] - df_ablation.temperatureObserved) ** 2))
-ME = np.mean(df_ablation["T10m_" + model] - df_ablation.temperatureObserved)
-
-textstr = "\n".join((r"MD=%.1f °C " % (ME,),
-                     r"RMSD=%.1f °C" % (RMSE,),
-                     r"N=%.0f" % (np.sum(~np.isnan(df_ablation["T10m_" + model]))),
-                     ))
-t = ax1.text(0.55, 0.3, "Ablation sites\n" + textstr, transform=ax1.transAxes,
-    fontsize=14, verticalalignment="top", color="tab:red")
-t.set_bbox(dict(facecolor='w', alpha=0.5, edgecolor='w'))
-ax1.tick_params(axis='both', which='major', labelsize=16)
-
-ax1.set_xlabel("Observed 10 m subsurface temperature (°C)")
-ax1.set_ylabel("Predicted 10 m \nsubsurface temperature (°C)")
-pos1 = ax1.get_position()
-pos2 = [pos1.x0, pos1.y0+0.07,  pos1.width*1.1, pos1.height*0.7] 
-ax1.set_position(pos2)
 
 # =============== map =======================
 ax_map = plt.subplot(2,2,2)
 
 land.plot(color="k", ax=ax_map)
 
-im = ds_T10m_std_avg.where(ds_T10m_std_avg < 1000).T10m_std.plot(
+im = ds_T10m_std_avg.where(ds_T10m_std_avg < 1000).plot(
     ax=ax_map, add_colorbar=False)
 cbar = fig.colorbar(im, label="Average uncertainty of the ANN (°C)", shrink=0.8)
 gpd.GeoDataFrame.from_file("Data/misc/Zwally_10_zones_3413.shp").boundary.plot(
@@ -797,7 +862,7 @@ gpd.GeoDataFrame.from_file("Data/misc/Zwally_10_zones_3413.shp").boundary.plot(
 )
 ax_map.set_axis_off()
 ax_map.set_title("")
-ax_map.text(0.1, 0.9, '(b)',
+ax_map.text(0.1, 0.9, '(c)',
  horizontalalignment='left',
  verticalalignment='center',
  fontsize=14,
@@ -837,7 +902,7 @@ for k, site in enumerate(["NASA-E", "DYE-2", "KAN_L", 'KPC_U',"FA_13"]):
                            method='nearest').to_dataframe()
     cv_std = ds_T10m_std.sel(dict(latitude=df_select.latitude.unique()[0], 
                          longitude=df_select.longitude.unique()[0]),
-                    method='nearest').T10m_std.to_dataframe().T10m_std
+                    method='nearest').to_dataframe().T10m_std
 
     best_model_pred = ANN_predict(df_select[Predictors], 
                                   best_model, 

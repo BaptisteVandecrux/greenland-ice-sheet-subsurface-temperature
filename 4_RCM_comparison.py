@@ -633,10 +633,14 @@ model = "ANN"
 land = gpd.GeoDataFrame.from_file("Data/misc/Land_3413.shp")
 land = land.to_crs(ds_T10m.rio.crs)
 
-fig, ax = plt.subplots(2, 3, figsize=(10, 10))
-plt.subplots_adjust(hspace=0.05, wspace=0.1, right=0.8, left=0.01, bottom=0.01, top=0.95)
+fig, ax = plt.subplots(3, 2, figsize=(10, 15))
+plt.subplots_adjust(hspace=0.07, wspace=0.1, right=0.8, left=0.01, bottom=0.01, top=0.95)
 ax = ax.flatten()
-
+ax[0].set_axis_off()
+ax[1].set_axis_off()
+ax_top = [plt.subplot(3,3,1),
+          plt.subplot(3,3,2),
+          plt.subplot(3,3,3)]
 ds_T10m_dy = ds_T10m.copy()
 ds_T10m_dy["time"] = [toYearFraction(d) for d in pd.to_datetime(ds_T10m_dy.time.values)]
 ds_T10m_dy = ds_T10m_dy.T10m.transpose("time", "y", "x")
@@ -646,16 +650,16 @@ for i in range(3):
     tmp = ds_T10m_dy.sel(time=slice(year_ranges[i][0], year_ranges[i][1]))
     _, _, slope, _, pval, _ = linregress_3D(tmp.time, tmp)
 
-    land.plot(ax=ax[i], zorder=0, color="black")
+    land.plot(ax=ax_top[i], zorder=0, color="black")
     vmin = -1.5
     vmax = 1.5
 
     im = (slope * 10).plot(
-        ax=ax[i], vmin=vmin, vmax=vmax, cmap="coolwarm", add_colorbar=False
+        ax=ax_top[i], vmin=vmin, vmax=vmax, cmap="coolwarm", add_colorbar=False
     )
     significant = slope.where(pval > 0.1)
     X, Y = np.meshgrid(slope.x, slope.y)
-    ax[i].hexbin(X.reshape(-1), Y.reshape(-1),
+    ax_top[i].hexbin(X.reshape(-1), Y.reshape(-1),
         significant.data[:, :].reshape(-1),
         gridsize=(50, 50), hatch="..", alpha=0)
 
@@ -664,18 +668,18 @@ for i in range(3):
     if i in [1, 3]:
         if i == 1:
             cbar_ax = fig.add_axes([0.85, 0.2, 0.03, 0.6])
-        cb = plt.colorbar(im, ax=ax[i], cax=cbar_ax)
+        cb = plt.colorbar(im, ax=ax_top[i], cax=cbar_ax)
         cb.ax.get_yaxis().labelpad = 18
         cb.set_label("Trend in 10 m subsurface temperature (°C decade $^{-1}$)",
             fontsize=14, rotation=270)
-    ax[i].set_axis_off()
-    ax[i].set_title(
+    ax_top[i].set_axis_off()
+    ax_top[i].set_title(
         "("+ABC[i].lower() + ") ANN, " + str(year_start) + " to " + str(year_end),
             fontsize=14,
     )
 
-    ax[i].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
-    ax[i].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
+    ax_top[i].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
+    ax_top[i].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
 
 # calculating trend on entire period
 X = np.array([toYearFraction(d) for d in T10m_GrIS.loc[T10m_GrIS.notnull()].index])
@@ -736,9 +740,9 @@ print(
     % (model, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1])
 )
 
-ds_T10m_l = (ds_racmo, ds_hh, ds_mar)
-T10m_GrIS_l = (ds_racmo_GrIS, ds_hh_GrIS, ds_mar_GrIS)
-model_l = ("RACMO", "HIRHAM", "MAR")
+ds_T10m_l = (ds_ann_3413, ds_racmo, ds_hh, ds_mar)
+T10m_GrIS_l = (ds_ann_GrIS,ds_racmo_GrIS, ds_hh_GrIS, ds_mar_GrIS)
+model_l = ("ANN", "RACMO", "HIRHAM", "MAR")
 
 for k in range(len(ds_T10m_l)):
     ds_T10m = ds_T10m_l[k]
@@ -756,19 +760,19 @@ for k in range(len(ds_T10m_l)):
     tmp = ds_T10m_dy.sel(time=slice(1980, 2016))
     _, _, slope, _, pval, _ = linregress_3D(tmp.time, tmp)
 
-    land.plot(ax=ax[k + 3], zorder=0, color="black")
+    land.plot(ax=ax[k + 2], zorder=0, color="black")
     im = (slope * 10).plot(
-        ax=ax[k + 3], vmin=vmin, vmax=vmax, cmap="coolwarm", add_colorbar=False
+        ax=ax[k + 2], vmin=vmin, vmax=vmax, cmap="coolwarm", add_colorbar=False
     )
     X, Y = np.meshgrid(slope.x, slope.y)
-    ax[k + 3].hexbin(X.reshape(-1), Y.reshape(-1),
+    ax[k + 2].hexbin(X.reshape(-1), Y.reshape(-1),
         slope.where(pval > 0.1).data[:, :].reshape(-1),
         gridsize=(50, 50), hatch="..", alpha=0)
 
-    ax[k + 3].set_axis_off()
-    ax[k + 3].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
-    ax[k + 3].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
-    ax[k + 3].set_title("("+ABC[k + 3].lower() + ") " + model + ", 1980 to 2016", 
+    ax[k + 2].set_axis_off()
+    ax[k + 2].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
+    ax[k + 2].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
+    ax[k + 2].set_title("("+ABC[k + 3].lower() + ") " + model + ", 1980 to 2016", 
         fontsize=14)
     # calculating trend on entire period
     X = np.array([toYearFraction(d) for d in T10m_GrIS.loc[T10m_GrIS.notnull()].index])
@@ -891,10 +895,10 @@ def plot_selected_ds(tmp_in, ax, label, mask=0, trend_line=False):
             % (label,  X[0], X[-1], tmp.mean(), 
                est2.params[1] * 10, est2.pvalues[1]))
         
-        if trend_line & (i<2):
-            tmp = tmp.to_frame()
-            tmp['pred'] = est2.params[1] *X + est2.params[0] 
-            tmp['pred'].plot(ax=ax, zorder=1000, color='tab:blue', alpha=0.7, linestyle="--",lw=2, label='_nolegend_')
+        # if trend_line & (i<2):
+        #     tmp = tmp.to_frame()
+        #     tmp['pred'] = est2.params[1] *X + est2.params[0] 
+        #     tmp['pred'].plot(ax=ax, zorder=1000, color='tab:blue', alpha=0.7, linestyle="--",lw=2, label='_nolegend_')
 
 print('Model, Period, Mean T10m, Trend in T10m (°C decade-1), p-value')
 fig, ax = plt.subplots(4,1, figsize=(5, 10))

@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 np.seterr(invalid="ignore")
-
+needed_cols = ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
 
 df_info = pd.read_csv('Data/PROMICE/AWS_station_locations.csv')
 df_info = df_info.loc[df_info.location_type == 'ice sheet',:]
@@ -115,6 +115,14 @@ for i in df_info.index:
     df_10["depthOfTemperatureObservation"] = 10
     df_10["note"] = ""
 
+    df_10["reference"] = "Fausto, R. S., van As, D., Mankoff, K. D., Vandecrux, B., Citterio, M., Ahlstrøm, A. P., Andersen, S. B., Colgan, W., Karlsson, N. B., Kjeldsen, K. K., Korsgaard, N. J., Larsen, S. H., Nielsen, S., Pedersen, A. Ø., Shields, C. L., Solgaard, A. M., and Box, J. E.: Programme for Monitoring of the Greenland Ice Sheet (PROMICE) automatic weather station data, Earth Syst. Sci. Data, 13, 3819–3845, https://doi.org/10.5194/essd-13-3819-2021 , 2021. and How, P., Ahlstrøm, A.P., Andersen, S.B., Box, J.E., Citterio, M., Colgan, W.T., Fausto, R., Karlsson, N.B., Jakobsen, J., Larsen, S.H., Mankoff, K.D., Pedersen, A.Ø., Rutishauser, A., Shields, C.L., Solgaard, A.M., van As, D., Vandecrux, B., Wright, P.J., PROMICE and GC-Net automated weather station data in Greenland, https://doi.org/10.22008/FK2/IW73UU, GEUS Dataverse, 2022."
+    
+    df_10["reference_short"] = "PROMICE: Fausto et al. (2021); How et al. (2022)"
+    if df_info.loc[i,'station_type'] == 'two booms':
+        df_10["reference"] = "Fausto, R. S., van As, D., Mankoff, K. D., Vandecrux, B., Citterio, M., Ahlstrøm, A. P., Andersen, S. B., Colgan, W., Karlsson, N. B., Kjeldsen, K. K., Korsgaard, N. J., Larsen, S. H., Nielsen, S., Pedersen, A. Ø., Shields, C. L., Solgaard, A. M., and Box, J. E.: Programme for Monitoring of the Greenland Ice Sheet (PROMICE) automatic weather station data, Earth Syst. Sci. Data, 13, 3819–3845, https://doi.org/10.5194/essd-13-3819-2021 , 2021. and How, P., Ahlstrøm, A.P., Andersen, S.B., Box, J.E., Citterio, M., Colgan, W.T., Fausto, R., Karlsson, N.B., Jakobsen, J., Larsen, S.H., Mankoff, K.D., Pedersen, A.Ø., Rutishauser, A., Shields, C.L., Solgaard, A.M., van As, D., Vandecrux, B., Wright, P.J., PROMICE and GC-Net automated weather station data in Greenland, https://doi.org/10.22008/FK2/IW73UU, GEUS Dataverse, 2022."
+        
+        df_10["reference_short"] = "GC-Net continuation: Fausto et al. (2021); How et al. (2022)"
+
     # filtering
     df_10.loc[df_10["temperatureObserved"] > 0.1, "temperatureObserved"] = np.nan
     df_10.loc[df_10["temperatureObserved"] < -70, "temperatureObserved"] = np.nan
@@ -122,10 +130,16 @@ for i in df_info.index:
     df_PROMICE = pd.concat((df_PROMICE, df_10.reset_index()))
 
 df_PROMICE = df_PROMICE.set_index("date")
-df_PROMICE_month_mean = df_PROMICE.groupby("site").resample("M").mean().reset_index("site")
 df_PROMICE = df_PROMICE.loc[df_PROMICE.temperatureObserved.notnull(), :]
-df_PROMICE_month_mean = df_PROMICE_month_mean.loc[df_PROMICE_month_mean.temperatureObserved.notnull(), :]
 
+col_to_avg = ['site', 'temperatureObserved',  'latitude', 'longitude', 'elevation']
+df_PROMICE_month_mean = df_PROMICE[col_to_avg].groupby("site").resample("M").mean().reset_index("site")
+
+col_to_fill = ['site', 'depthOfTemperatureObservation', 'note', 'reference', 'reference_short']
+tmp = df_PROMICE[col_to_fill].groupby("site").resample("M").first().drop(columns='site').reset_index("site")
+if (tmp.site != df_PROMICE_month_mean.site).any():
+    print(wtf)
+df_PROMICE_month_mean[col_to_fill] = tmp
 df_PROMICE_month_mean.to_csv("Data/PROMICE/PROMICE_10m_firn_temperature.csv", sep=";")
 
 
