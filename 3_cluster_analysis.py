@@ -129,13 +129,13 @@ hb = ax1.hexbin(df.x_3413, df.y_3413,
 cbar_ax = fig.add_axes([0.62, 0.58, 0.2, 0.01])
 cb = plt.colorbar(hb, ax=ax1, cax=cbar_ax, orientation="horizontal")
 cb.ax.get_yaxis().fontsize = 14
-cb.set_label("Number of monthly \n$T_{10m}$ observations", fontsize=12, rotation=0)
+cb.set_label("Number of \n$T_{10m}$ observations", fontsize=12, rotation=0)
 
 ax2 = fig.add_subplot(spec[1])
 ax2.set_title("(b)",loc='left',fontweight='bold')
 ax2.hist(df.date.dt.year.values, density=False, bins=30, alpha=0.7, edgecolor="white")
 ax2.set_yscale('log')
-ax2.set_ylabel('Number of monthly observations')
+ax2.set_ylabel('Number of observations')
 ax2.set_xlabel('Year')
 ax2.grid()  
 
@@ -218,7 +218,7 @@ plt.title("Estimated number of clusters: %d" % n_clusters_)
 plt.show()
 
 gdf["clusters"] = labels
-gdf.date = gdf.date.astype("datetime64[ns]")
+# gdf.date = gdf.date.astype("datetime64[ns]")
 gdf = gdf.set_index(["clusters", "date"])
 # %%
 # fig, ax = plt.subplots(5, 3, figsize=(20, 20))

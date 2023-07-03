@@ -333,21 +333,15 @@ df_hawley["durationOpen"] = 2
 df_hawley["durationMeasured"] = 0
 df_hawley["error"] = "not reported"
 
-df_all = pd.concat((df_all, 
-    df_hawley[needed_cols],
-    ), ignore_index=True,
-)
+df_all = pd.concat((df_all, df_hawley[needed_cols]), ignore_index=True)
 
 # %% PROMICE
 print("Loading PROMICE")
 df_promice = pd.read_csv("Data/PROMICE/PROMICE_10m_firn_temperature.csv", sep=";")
 df_promice = df_promice.loc[df_promice.temperatureObserved.notnull()]
-df_promice["reference_short"] = "PROMICE"
 df_promice = df_promice.loc[df_promice.site != "QAS_A", :]
-df_promice.loc[
-    (df_promice.site == "CEN") & (df_promice.temperatureObserved > -18),
-    "temperatureObserved",
-] = np.nan
+df_promice.loc[(df_promice.site == "CEN") & (df_promice.temperatureObserved > -18),
+               "temperatureObserved"] = np.nan
 
 df_promice["method"] = "RS Components thermistors 151-243"
 df_promice["durationOpen"] = 0
@@ -355,11 +349,7 @@ df_promice["durationMeasured"] = 30 * 24
 df_promice["error"] = 0.2
 df_promice["note"] = ""
 
-df_all = pd.concat((df_all, 
-    df_promice[needed_cols],
-    ), ignore_index=True,
-)
-
+df_all = pd.concat((df_all, df_promice[needed_cols]), ignore_index=True)
 
 # %% GC-Net
 print("Loading GC-Net")
@@ -369,10 +359,7 @@ df_GCN["method"] = "thermocouple"
 df_GCN["durationOpen"] = 0
 df_GCN["durationMeasured"] = 30 * 24
 df_GCN["error"] = 0.5
-df_all = pd.concat((df_all, 
-    df_GCN[needed_cols],
-    ), ignore_index=True,
-)
+df_all = pd.concat((df_all, df_GCN[needed_cols]), ignore_index=True)
 
 # %% Steffen 2001 table (that could not be found in the GC-Net AWS data)
 df = pd.read_excel("Data/GC-Net/steffen2001.xlsx")
@@ -385,10 +372,7 @@ df[
 ] = "Steffen, K., Box, J.E. and Abdalati, W., 1996. Greenland climate network: GC-Net. US Army Cold Regions Reattach and Engineering (CRREL), CRREL Special Report, pp.98-103. and Steffen, K. and J. Box: Surface climatology of the Greenland ice sheet: Greenland Climate Network 1995-1999, J. Geophys. Res., 106, 33,951-33,972, 2001 and Steffen, K., Vandecrux, B., Houtz, D., Abdalati, W., Bayou, N., Box, J., Colgan, L., Espona Pernas, L., Griessinger, N., Haas-Artho, D., Heilig, A., Hubert, A., Iosifescu Enescu, I., Johnson-Amin, N., Karlsson, N. B., Kurup, R., McGrath, D., Cullen, N. J., Naderpour, R., Pederson, A. Ø., Perren, B., Philipps, T., Plattner, G.K., Proksch, M., Revheim, M. K., Særrelse, M., Schneebli, M., Sampson, K., Starkweather, S., Steffen, S., Stroeve, J., Watler, B., Winton, Ø. A., Zwally, J., Ahlstrøm, A.: GC-Net Level 1 automated weather station data, https://doi.org/10.22008/FK2/VVXGUT, GEUS Dataverse, V2, 2023. and Vandecrux, B., Box, J.E., Ahlstrøm, A.P., Andersen, S.B., Bayou, N., Colgan, W.T., Cullen, N.J., Fausto, R.S., Haas-Artho, D., Heilig, A., Houtz, D.A., How, P., Iosifescu Enescu , I., Karlsson, N.B., Kurup Buchholz, R., Mankoff, K.D., McGrath, D., Molotch, N.P., Perren, B., Revheim, M.K., Rutishauser, A., Sampson, K., Schneebeli, M., Starkweather, S., Steffen, S., Weber, J., Wright, P.J., Zwally, J., Steffen, K.: The historical Greenland Climate Network (GC-Net) curated and augmented Level 1 dataset, Submitted to ESSD, 2023"
 df["reference_short"] = "Historical GC-Net: Steffen et al. (1996, 2001, 2023); Vandecrux et al. (2023)"
 df["error"] = 0.5
-df_all = pd.concat((df_all, 
-    df[needed_cols],
-    ), ignore_index=True,
-)
+df_all = pd.concat((df_all, df[needed_cols]), ignore_index=True)
 
 # %% Historical swc
 df_swc = pd.DataFrame()
@@ -2027,7 +2011,7 @@ df_all = df_all.loc[~np.isnan(df_all.temperatureObserved.astype(float).values)]
 
 df_all.to_csv("output/subsurface_temperature_summary.csv")
 
-# %% avereaging to monthly and clipping to contiguous ice sheet
+# %% averaging to monthly and clipping to contiguous ice sheet
 df = pd.read_csv("output/subsurface_temperature_summary.csv", low_memory=False)
 
 df_ambiguous_date = df.loc[pd.to_datetime(df.date.astype(str), utc=True, format='mixed', errors="coerce").isnull(), :]
@@ -2077,8 +2061,13 @@ for ref in df.reference_short.unique():
             print(ref, site, "... averaging to monthly")
             col_non_num = ["Unnamed: 0", "site", "reference", "reference_short", "note",'error', 'durationOpen', 'durationMeasured', 'method']
             df_loc_first = df_loc.set_index("date")[col_non_num].resample("M").first()
-            df_loc = df_loc.set_index("date")[[c for c in df_loc.set_index("date").columns if c not in col_non_num]].resample("M").mean()
+
+            col_num = ['latitude', 'longitude', 'elevation', 'depthOfTemperatureObservation', 'temperatureObserved']
+            df_loc = df_loc.set_index("date")[col_num].resample("M").mean()
+
             df_loc[col_non_num] = df_loc_first[col_non_num]
+            df_loc = df_loc.loc[df_loc.latitude.notnull(), :]
+            df_loc['durationMeasured'] = 30
             if any(df_loc.depthOfTemperatureObservation.unique() != 10):
                 print("Some non-10 m depth")
                 print(df_loc.depthOfTemperatureObservation.unique())

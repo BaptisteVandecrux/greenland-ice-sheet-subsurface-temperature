@@ -14,7 +14,6 @@ import geopandas as gpd
 import xarray as xr
 from scipy.spatial.distance import cdist
 
-# import GIS_lib as gis
 import matplotlib
 matplotlib.rcParams.update({"font.size": 14})
 
@@ -26,24 +25,22 @@ ABC = "ABCDEFGHIJKL"
 print("loading dataset")
 df = pd.read_csv("output/10m_temperature_dataset_monthly.csv")
 
-df_ambiguous_date = df.loc[pd.to_datetime(df.date, errors="coerce").isnull(), :]
-df = df.loc[~pd.to_datetime(df.date, errors="coerce").isnull(), :]
+# spatial selection to the contiguous ice sheet
+print(len(df), 'observation in dataset')
+ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
+ice = ice.to_crs("EPSG:3413")
+ice_4326 = ice.to_crs(4326)
+gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.longitude, df.latitude), crs="EPSG:4326")
+ind_in = gpd.sjoin(gdf, ice_4326, predicate='within').index
 
-df_bad_long = df.loc[df.longitude > 0, :]
-df["longitude"] = -df.longitude.abs().values
+print(len(df)-len(ind_in), 'observations outside ice sheet mask')
+df = df.loc[ind_in, :]
 
-df_no_coord = df.loc[np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
-df = df.loc[~np.logical_or(df.latitude.isnull(), df.latitude.isnull()), :]
+# temporal selection
+print(((df.date<'1949-12-31') | (df.date>'2022')).sum(),'observations outside of 1950-2023')
+df = df.loc[(df.date>'1949-12-01') & (df.date<'2023'),:]
 
-df_invalid_depth = df.loc[
-    pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
-]
-df = df.loc[
-    ~pd.to_numeric(df.depthOfTemperatureObservation, errors="coerce").isnull(), :
-]
-
-df_no_elev = df.loc[df.elevation.isnull(), :]
-df = df.loc[~df.elevation.isnull(), :]
+print(len(df), 'observations kept')
 
 df["year"] = pd.DatetimeIndex(df.date).year
 dates = pd.DatetimeIndex(df.date)
@@ -121,7 +118,7 @@ ds_hh = ds_hh.rio.write_crs(crs_racmo).drop_vars(["lat", "lon"])
 # ds_hh = ds_hh.drop_vars(['lat', 'lon']).rio.reproject(target_crs)
 
 print("loading ANN")
-ds_ann = xr.open_dataset("output/predicted_T10m.nc")
+ds_ann = xr.open_dataset("output/T10m_prediction_2.nc")
 ds_ann["time"] = pd.to_datetime(ds_ann["time"])
 crs_ann = CRS.from_string("EPSG:4326")
 ds_ann = ds_ann.rio.write_crs(crs_ann)
@@ -147,9 +144,6 @@ df["T10m_RACMO"] = np.nan
 df["T10m_MAR"] = np.nan
 df["T10m_HIRHAM"] = np.nan
 df["T10m_ANN"] = np.nan
-
-# interpolating HIRHAM output at the observation locations
-
 
 def extract_T10m_values(ds, df, dim1="x", dim2="y", name_out="out"):
     coords_uni = np.unique(df[[dim1, dim2]].values, axis=0)
@@ -221,7 +215,6 @@ for i, model in enumerate(model_list):
         df_10m["T10m_" + model],
         marker="+",
         linestyle="none",
-        # markeredgecolor="lightgray",
         markeredgewidth=0.5,
         markersize=5,
         color="k",
@@ -274,18 +267,18 @@ for i, model in enumerate(model_list):
 # Comparison for ablation datasets
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
 df_10m = df_10m.loc[
-    (df_10m["reference_short"].astype(str) == "Fausto et al. (2021); How et al. (2022)")
-    | (df_10m["reference_short"].astype(str) == "Hills et al. (2018)")
-    | (df_10m["reference_short"].astype(str) == "Hills et al. (2017)")
-    | (df_10m["site"].astype(str) == "SwissCamp"),
+    np.isin(df_10m["reference_short"].astype(str),  
+            ["PROMICE: Fausto et al. (2021); How et al. (2022)",
+             "Hills et al. (2018)",
+             "Hills et al. (2017)"]) \
+    | np.isin(df_10m["site"].astype(str), 
+              ["Swiss Camp", "JAR", "JAR1", "JAR2", "JAR3"]),
     :,
 ]
 df_10m = df_10m.loc[
-    (df_10m["site"].astype(str) != "CEN")
-    & (df_10m["site"].astype(str) != "EGP")
-    & (df_10m["site"].astype(str) != "KAN_U"),
-    :,
-]
+    ~np.isin(df_10m["site"].astype(str), 
+              ["CEN","CEN1","CEN2", "EGP", "KAN_U"]),
+    :,]
 df_10m = df_10m.reset_index()
 df_10m = df_10m.sort_values("year")
 ref_list = df_10m["site"].unique()
@@ -354,8 +347,7 @@ fig.savefig("figures/model_comp_all_no_legend.png", dpi = 300)
 from math import sin, cos, sqrt, atan2, radians
 matplotlib.rcParams.update({'font.size': 14})
 
-ds_T10m_std = xr.open_dataset("output/uncertainty/predicted_T10m_std_all.nc")
-
+ds_T10m_std = xr.open_dataset("output/T10m_uncertainty.nc")
 
 def get_distance(point1, point2):
     R = 6370
@@ -385,7 +377,7 @@ site_list = pd.DataFrame(
             # ["NASA-SE", "1998", "2022", 66.47776999999999, -42.493634, 2385.0],
             ["KAN-U", "2011", "2019", 67.0003, -47.0253, 1840.0],
             ["Swiss Camp", "1990", "2005", 69.57, -49.3, 1174.0],
-            ["KPC_U", "1954", "2022", 79.83505, -25.16203, 770],
+            ["KPC_U", "1950", "2022", 79.83505, -25.16203, 770],
             ["SCO_U", "1950", "2022",  72.41602, -27.17758, 996.0],
             ["FA_13", "1950", "2022", 66.181, -39.0435, 1563.0],
         ]
@@ -584,11 +576,11 @@ def linregress_3D(x, y):
     return cov, cor, slope, intercept, pval, stderr
 
 
-# finding ice-sheet-wide average and stdev values for 1954, 1985 and 2021
+# finding ice-sheet-wide average and stdev values for 1950, 1985 and 2021
 # ds_ann_y = ds_ann.resample(time='Y').mean()
 # ds_ann_y = ds_ann_y.weighted(weights)
-# print((ds_ann_y.mean(('latitude','longitude'))).to_pandas().T10m.loc[['1954-12-31', '1985-12-31','2021-12-31']])
-# print((ds_ann_y.std(('latitude','longitude'))).to_pandas().T10m.loc[['1954-12-31', '1985-12-31','2021-12-31']])
+# print((ds_ann_y.mean(('latitude','longitude'))).to_pandas().T10m.loc[['1950-12-31', '1985-12-31','2021-12-31']])
+# print((ds_ann_y.std(('latitude','longitude'))).to_pandas().T10m.loc[['1950-12-31', '1985-12-31','2021-12-31']])
 
 # calculating breakpoint
 # x = ds_ann_GrIS.loc['1954':].index.values.astype(float)
@@ -616,7 +608,7 @@ def linregress_3D(x, y):
 # plt.plot(x, y_pred)
 # Answer: 1985-04-01
 
-year_ranges = np.array([[1954, 1985], [1985, 2023], [1954, 2023]])
+year_ranges = np.array([[1950, 1985], [1985, 2023], [1950, 2023]])
 
 CB_color_cycle = [ "#377eb8", "#4daf4a",  "#f781bf", "#a65628",  "#984ea3",
     "#999999",  "#e41a1c", "#dede00"]
@@ -645,8 +637,6 @@ ds_T10m_dy = ds_T10m.copy()
 ds_T10m_dy["time"] = [toYearFraction(d) for d in pd.to_datetime(ds_T10m_dy.time.values)]
 ds_T10m_dy = ds_T10m_dy.T10m.transpose("time", "y", "x")
 for i in range(3):
-    # tmp = T10m_GrIS.resample('Y').mean().loc[str(year_ranges[i,0]):str (year_ranges[i,1])]
-
     tmp = ds_T10m_dy.sel(time=slice(year_ranges[i][0], year_ranges[i][1]))
     _, _, slope, _, pval, _ = linregress_3D(tmp.time, tmp)
 
@@ -858,16 +848,11 @@ CB_color_cycle = [ "#377eb8", "#4daf4a",  "#f781bf", "#a65628",  "#984ea3",
     "#999999",  "#e41a1c", "#dede00"]
 
 def plot_selected_ds(tmp_in, ax, label, mask=0, trend_line=False):
-    if label == "ANN":
-        col = CB_color_cycle[0]
-    elif label == "RACMO":
-        col = CB_color_cycle[1]
-    elif label == "HIRHAM":
-        col = CB_color_cycle[2]
-    elif label == "MAR":
-        col = CB_color_cycle[3]
-    else:
-        col = CB_color_cycle[4]
+    col = CB_color_cycle[4]
+    if label == "ANN": col = CB_color_cycle[0]
+    if label == "RACMO": col = CB_color_cycle[1]
+    if label == "HIRHAM": col = CB_color_cycle[2]
+    if label == "MAR": col = CB_color_cycle[3]
 
     # tmp.plot(ax=ax, color='black', label='_no_legend_',alpha=0.3)
     tmp_in = tmp_in.resample("Y").mean()
@@ -876,7 +861,7 @@ def plot_selected_ds(tmp_in, ax, label, mask=0, trend_line=False):
     )
 
     if label == 'ANN':
-        y1 = [1954, 1985, 1954, 1980]
+        y1 = [1950, 1985, 1950, 1980]
         y2 = [1985, 2022, 2022, 2016]
     else:
         y1 = [1980]
@@ -961,6 +946,54 @@ fig.text(0.01, 0.5,
     "Annual 10 m subsurface temperature (°C)",
     fontsize=14,va="center",rotation="vertical")
 fig.savefig("figures/figure5.png", dpi=300)
+#%% Stats for other periods
+
+def table_selected_ds(tmp_in,label, mask=0):
+    # tmp.plot(ax=ax, color='black', label='_no_legend_',alpha=0.3)
+    tmp_in = tmp_in.resample("Y").mean()
+    # y1 = [1980, 2010]
+    # y2 = [1990, 2020]
+    y1 = [1950, 2017]
+    y2 = [1960, 2022]
+
+    for i in range(len(y1)):
+        tmp = tmp_in.loc[str(y1[i]):str(y2[i])]
+        X = np.array([toYearFraction(d) for d in tmp.index])
+        y = tmp.values
+    
+        X2 = sm.add_constant(X)
+        est = sm.OLS(y, X2)
+        est2 = est.fit()
+            
+        print( "%s, %i-%i, %0.1f, %0.1f, %0.2f"
+            % (label,  X[0], X[-1], tmp.mean(), 
+               est2.params[1] * 10, est2.pvalues[1]))
+        
+print('Model, Period, Mean T10m, Trend in T10m (°C decade-1), p-value')
+print("All Greenland ice sheet")
+table_selected_ds(ds_ann_GrIS,"ANN")
+# table_selected_ds(ds_racmo_GrIS,"RACMO")
+# table_selected_ds(ds_hh_GrIS,"HIRHAM")
+# table_selected_ds(ds_mar_GrIS,"MAR")
+# print("Dry snow area")
+# table_selected_ds(ds_ann_DSA,"ANN")
+# table_selected_ds(ds_racmo_DSA,"RACMO")
+# table_selected_ds(ds_hh_DSA,"HIRHAM")
+# table_selected_ds(ds_mar_DSA,"MAR")
+
+# print("Percolation area")
+# table_selected_ds(ds_ann_PA,"ANN")
+# table_selected_ds(ds_racmo_PA,"RACMO")
+# table_selected_ds(ds_hh_PA,"HIRHAM")
+# table_selected_ds(ds_mar_PA,"MAR")
+# print("Bare ice area")
+# table_selected_ds(ds_ann_BIA,"ANN")
+# table_selected_ds(ds_racmo_BIA,"RACMO")
+# table_selected_ds(ds_hh_BIA,"HIRHAM")
+# table_selected_ds(ds_mar_BIA,"MAR")
+
+
+
 
 # %% comparison with ERA5 temperature: trend difference
 ds_era_m = xr.open_dataset("Data/ERA5/ERA5_monthly_temp_snowfall.nc")
