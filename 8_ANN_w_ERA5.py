@@ -755,7 +755,8 @@ for ax1, model in zip( [plt.subplot(4,2,1), plt.subplot(4,2,3)],
     )
     RMSE = np.sqrt(np.mean((df_ablation["T10m_" + model] - df_ablation.temperatureObserved) ** 2))
     ME = np.mean(df_ablation["T10m_" + model] - df_ablation.temperatureObserved)
-    
+    if abs(ME)<0.05:
+        ME=abs(ME)
     textstr = "\n".join((r"MD=%.1f °C " % (ME,),
                          r"RMSD=%.1f °C" % (RMSE,),
                          r"N=%.0f" % (np.sum(~np.isnan(df_ablation["T10m_" + model]))),
