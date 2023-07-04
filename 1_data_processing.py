@@ -388,7 +388,7 @@ df_swc["date"] = pd.to_datetime(["1990-07-01","1990-08-01","1990-08-24" ])
 df_swc["reference_short"] = ["Ohmura et al. (1992)"]*3
 df_swc[
     "reference"
-] = ["Ohmura, A. and 10 others. 1992; Energy and Mass balance during the melt season at the equilibrium line altitude, Paakitsoq, Greenland ice sheet. Zürich, Swiss Federal Institute of Technology. (ETH Greenland Expedition. Progress Report 2.)"]*3
+] = ["Ohmura, A., Steffen, K., Blatter, H., Greuell, W., Rotach, M., Stober, M., Konzelmann, T., Forrer, J., Abe-Ouchi, A., Steiger, D. and Niederbaumer, G.: Energy and mass balance during the melt season at the equilibrium line altitude. Paakitsoq, Greenland ice sheet: Progress report, 2, 1992."]*3
 
 df_swc["method"] = ["NA"]*3
 df_swc["durationOpen"] = ["NA"]*3

@@ -125,7 +125,7 @@ ds_ann = ds_ann.rio.write_crs(crs_ann)
 # ds_ann = ds_ann.rio.reproject(target_crs)
 
 
-# %% Extracting model values at observation sites
+# Extracting model values at observation sites
 # finding observation coordinate in RACMO's CRS
 df.date = pd.to_datetime(df.date)
 df["x"], df["y"] = transform(
@@ -417,8 +417,8 @@ for i, site in enumerate(site_list.index):
         latitude=site_list.loc[site, "lat"],
         method="nearest").to_dataframe().resample("Y").mean()
     df_ANN_interp = np.interp(df_select.date, df_ANN.index, df_ANN.T10m)
-    MD = np.sqrt(np.mean((df_ANN_interp - df_select.temperatureObserved) ** 2))
-    RMSD = np.mean((df_ANN_interp - df_select.temperatureObserved))
+    RMSD = np.sqrt(np.mean((df_ANN_interp - df_select.temperatureObserved) ** 2))
+    MD = np.mean((df_ANN_interp - df_select.temperatureObserved))
     N = df_select.temperatureObserved.notnull().sum()
     print("%s, %i, %0.1f, %0.1f" % (site, N, RMSD, MD))
 
@@ -954,10 +954,10 @@ fig.savefig("figures/figure6_comp_ice_sheet_areas.pdf")
 def table_selected_ds(tmp_in,label, mask=0):
     # tmp.plot(ax=ax, color='black', label='_no_legend_',alpha=0.3)
     tmp_in = tmp_in.resample("Y").mean()
-    # y1 = [1980, 2010]
-    # y2 = [1990, 2020]
-    y1 = [1950, 2017]
-    y2 = [1960, 2022]
+    y1 = [1980, 2010]
+    y2 = [1990, 2020]
+    # y1 = [1950, 2017]
+    # y2 = [1960, 2022]
 
     for i in range(len(y1)):
         tmp = tmp_in.loc[str(y1[i]):str(y2[i])]
