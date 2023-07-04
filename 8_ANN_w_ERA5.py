@@ -86,7 +86,7 @@ if produce_input_grid:
         print(k+1,'/',firn_memory)
         ds_era["t2m_" + str(k)] = ds_era["t2m_0"].shift(time=12*k)
         ds_era["sf_" + str(k)] = ds_era["sf_0"].shift(time=12*k)
-    ds_era['month'] = np.cos((ds_era.time.dt.month-1)/11*2*np.pi)
+    ds_era['month'] = np.cos((ds_era.time.dt.month-1)/12*2*np.pi)
     
     #cropping the first 10 years
     ds_era = ds_era.isel(time=slice(10*12,None))
@@ -268,6 +268,7 @@ for k in range(2):
                            bbox_to_anchor=(0.5, 1.2))
 
 fig.savefig("figures/figure2_histograms.png", dpi =300)
+fig.savefig("figures/figure2_histograms.pdf")
         
 
 # %% ANN functions
@@ -511,7 +512,7 @@ if predict:
     ds_T10m.attrs['author'] = 'Baptiste Vandecrux'
     ds_T10m.attrs['contact'] = 'bav@geus.dk'
     ds_T10m.attrs['description'] = 'Monthly grids of Greenland ice sheet 10 m subsurface temperature for 1954-2022 as predicted by an artifical neural network trained on more than 4500 in situ observations and using ERA5 snowfall and air temperature as input.'
-    ds_T10m.to_netcdf("output/T10m_prediction_2.nc")
+    ds_T10m.to_netcdf("output/T10m_prediction.nc")
     
 ds_T10m = xr.open_dataset("output/T10m_prediction.nc")["T10m"]
 
@@ -572,7 +573,8 @@ def ANN_model_cv(df_pred, model_list, PredictorScalerFit_list, TargetVarScalerFi
 predict = 0
 if predict:
     print("predicting T10m uncertainty over entire ERA5 dataset")
-    for year in range(2022,2023): #np.unique(ds_era.time.dt.year):
+    print("...takes about 10 hours")
+    for year in range(1950,2023): #np.unique(ds_era.time.dt.year):
         ds_T10m_std = ds_era["t2m"].sel(time=str(year)).copy().rename("T10m_std") * np.nan
         for time in ds_T10m_std.time:
             if (time.dt.month==1) & (time.dt.day==1):
@@ -589,12 +591,12 @@ if predict:
     
         ds_T10m_std.to_netcdf("output/uncertainty/predicted_T10m_std_"+str(year)+".nc")
     ds_T10m_std = xr.open_mfdataset(
-        ["output/uncertainty/predicted_T10m_std_"+str(year)+".nc" for year in range(1954,2023)])
+        ["output/uncertainty/predicted_T10m_std_"+str(year)+".nc" for year in range(1950,2023)])
     ds_T10m_std = ds_T10m_std.rio.write_crs(4326)
     ice_4326 = ice.to_crs(4326)
     msk = ds_T10m_std.T10m_std.isel(time=0).rio.clip(ice_4326.geometry, ice_4326.crs)
     ds_T10m_std = ds_T10m_std.where(msk.notnull())
-
+    ds_T10m_std['T10m_std'] = xr.where(ds_T10m_std.T10m_std<0.5, 0.5, ds_T10m_std.T10m_std)
     ds_T10m_std.attrs['author'] = 'Baptiste Vandecrux'
     ds_T10m_std.attrs['contact'] = 'bav@geus.dk'
     ds_T10m_std.attrs['description'] = 'Monthly grids of the uncertainty of the ANN Greenland ice sheet 10 m subsurface temperature for 1954-2022 calculated from the standard deviation between the predictions of 10 spatial cross-validation models.'
@@ -668,12 +670,15 @@ def extract_T10m_values(ds, df, dim1="x", dim2="y", name_out="out"):
     return df
 
 # extracting from T_10m dataset
-# df['T10m_ANN'] = np.nan
-# df = extract_T10m_values(
-#     ds_T10m.to_dataset(), df, dim1="longitude", dim2="latitude", name_out="T10m_ANN"
-# )
+df['T10m_ANN'] = np.nan
+df = extract_T10m_values(
+    ds_T10m.to_dataset(), df, dim1="longitude", dim2="latitude", name_out="T10m_ANN"
+)
 # calculating directly from the dataset
-df['T10m_ANN'] = ANN_predict(df[Predictors],best_model, best_PredictorScalerFit, best_TargetVarScalerFit)
+df.loc[df.T10m_ANN.isnull(), 'T10m_ANN'] = ANN_predict(df.loc[df.T10m_ANN.isnull(), Predictors],
+                                                       best_model, 
+                                                       best_PredictorScalerFit, 
+                                                       best_TargetVarScalerFit)
 
 # % Plotting Figure 2
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
@@ -866,3 +871,4 @@ fig.text(0.5,  0.02,  "Year",
 fig.text(0.03, 0.3, "10 m subsurface temperature (°C)",
     ha="center", va="center", rotation="vertical", fontsize=16)
 fig.savefig('figures/figure3.png')
+fig.savefig('figures/figure3.pdf')

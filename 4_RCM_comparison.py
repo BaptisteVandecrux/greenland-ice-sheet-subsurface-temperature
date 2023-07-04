@@ -118,7 +118,7 @@ ds_hh = ds_hh.rio.write_crs(crs_racmo).drop_vars(["lat", "lon"])
 # ds_hh = ds_hh.drop_vars(['lat', 'lon']).rio.reproject(target_crs)
 
 print("loading ANN")
-ds_ann = xr.open_dataset("output/T10m_prediction_2.nc")
+ds_ann = xr.open_dataset("output/T10m_prediction.nc")
 ds_ann["time"] = pd.to_datetime(ds_ann["time"])
 crs_ann = CRS.from_string("EPSG:4326")
 ds_ann = ds_ann.rio.write_crs(crs_ann)
@@ -215,8 +215,8 @@ for i, model in enumerate(model_list):
         df_10m["T10m_" + model],
         marker="+",
         linestyle="none",
-        markeredgewidth=0.5,
-        markersize=5,
+        markeredgewidth=0.8,
+        markersize=10,
         color="k",
     )
     RMSE = np.sqrt(np.mean((df_10m["T10m_" + model] - df_10m.temperatureObserved) ** 2))
@@ -291,9 +291,8 @@ for i, model in enumerate(model_list):
         df_10m["T10m_" + model],
         marker="+",
         linestyle="none",
-        # markeredgecolor="lightgray",
-        markeredgewidth=0.5,
-        markersize=5,
+        markeredgewidth=0.8,
+        markersize=10,
         color="tab:red",
     )
     RMSE = np.sqrt(np.mean((df_10m["T10m_" + model] - df_10m.temperatureObserved) ** 2))
@@ -341,7 +340,8 @@ fig.text(0.5,  0.02,  "Observed 10 m subsurface temperature (°C)",
     ha="center", va="center", fontsize=16)
 fig.text(0.03, 0.5, "Simulated 10 m\nsubsurface temperature (°C)",
     ha="center", va="center", rotation="vertical", fontsize=16)
-fig.savefig("figures/model_comp_all_no_legend.png", dpi = 300)
+fig.savefig("figures/figure4_model_comp.png", dpi = 300)
+fig.savefig("figures/figure4_model_comp.pdf")
 
 # %% Plotting at selected sites
 from math import sin, cos, sqrt, atan2, radians
@@ -403,7 +403,7 @@ CB_color_cycle = ["#377eb8","#4daf4a", "#f781bf",
     "#a65628", "#984ea3", "#999999", "#e41a1c", "#dede00"]
 
 fig, ax = plt.subplots(4, 2, figsize=(10, 11))
-fig.subplots_adjust(left=0.13, right=0.99, top=0.93, bottom=0.03, hspace=0.22)
+fig.subplots_adjust(left=0.10, right=0.99, top=0.93, bottom=0.03, hspace=0.22)
 ax = ax.flatten()
 
 for i, site in enumerate(site_list.index):
@@ -475,7 +475,8 @@ for i, site in enumerate(site_list.index):
 ax[0].legend(ncol=3, loc="lower right", bbox_to_anchor=(1.9, 1.2), fontsize=14)
 fig.text(0.02, 0.45, "10 m subsurface temperature (°C)",
     ha="center", va="center", rotation="vertical", fontsize=15)
-fig.savefig("figures/figure4.png", dpi=300, bbox_inches='tight')
+fig.savefig("figures/figure5_site_comp.png", dpi=300, bbox_inches='tight')
+fig.savefig("figures/figure5_site_comp.pdf", bbox_inches='tight')
 
 # %% Preparing input for trend analysis
 ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
@@ -784,7 +785,8 @@ for k in range(len(ds_T10m_l)):
         "%s, %i-%i, %0.1f, %0.3f"
         % (model, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1])
     )
-fig.savefig("figures/figure6.png", dpi=300)
+fig.savefig("figures/figure7_trend_maps.png", dpi=300)
+fig.savefig("figures/figure7_trend_maps.pdf")
 
 # %% Firn area averages analysis
 def selected_area(ds, shape, mask=0):
@@ -945,7 +947,8 @@ for i in range(4):
 fig.text(0.01, 0.5,
     "Annual 10 m subsurface temperature (°C)",
     fontsize=14,va="center",rotation="vertical")
-fig.savefig("figures/figure5.png", dpi=300)
+fig.savefig("figures/figure6_comp_ice_sheet_areas.png", dpi=300)
+fig.savefig("figures/figure6_comp_ice_sheet_areas.pdf")
 #%% Stats for other periods
 
 def table_selected_ds(tmp_in,label, mask=0):

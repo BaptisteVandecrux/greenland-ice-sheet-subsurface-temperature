@@ -2106,7 +2106,7 @@ df_summary = (df_m.groupby('reference_short')
 df_summary=df_summary.sort_values('num_measurements')
 explode = 0.5*(df_summary.num_measurements.max() - df_summary.num_measurements)/df_summary.num_measurements.max()
 
-fig, ax=plt.subplots(1,1, figsize=(7,10))
+fig, ax=plt.subplots(1,1, figsize=(12,8))
 plt.subplots_adjust(bottom=0.4)
 patches, texts = plt.pie( df_summary.num_measurements,
                          startangle=90,
@@ -2118,7 +2118,7 @@ if sort_legend:
                                           key=lambda x: x[2],
                                           reverse=True))
 
-plt.legend(patches, labels, loc='lower left', bbox_to_anchor=(-.1, -.7),
+plt.legend(patches, labels, loc='lower left', bbox_to_anchor=(-1, -.8),
            fontsize=8, ncol=3, title='Data origin (listed clock-wise)')
 plt.ylabel('')
 
@@ -2135,4 +2135,4 @@ df_summary['num_measurements'] = (df_m.groupby('reference_short')
                           .apply(lambda x: x.coeff.sum())
                           .reset_index(name='num_measurements')).num_measurements
 
-df_summary.sort_values('start_year').to_csv('dataset_composition.csv',sep='|', index=None)
+df_summary.sort_values('start_year').to_csv('output/dataset_composition.csv',sep='|', index=None)

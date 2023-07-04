@@ -140,6 +140,7 @@ ax2.set_xlabel('Year')
 ax2.grid()  
 
 fig.savefig('figures/figure1.png',dpi=300)
+fig.savefig('figures/figure1.pdf')
 
 # %% Studying clusters
 fig, ax = plt.subplots(1, 1, figsize=(6, 9))
