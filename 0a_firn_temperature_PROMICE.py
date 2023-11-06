@@ -12,6 +12,7 @@ tip list:
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import xarray as xr
 
 np.seterr(invalid="ignore")
 needed_cols = ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
@@ -86,11 +87,53 @@ if plotting:
         fig.savefig("figures/string processing/PROMICE_" + site + ".png", dpi=300)
 
 
+# %% exporting all subsurface temperatures to netcdf
+export_nc = True
+if export_nc:   
+
+    ref_promice = "Fausto, R. S., van As, D., Mankoff, K. D., Vandecrux, B., Citterio, M., Ahlstrøm, A. P., Andersen, S. B., Colgan, W., Karlsson, N. B., Kjeldsen, K. K., Korsgaard, N. J., Larsen, S. H., Nielsen, S., Pedersen, A. Ø., Shields, C. L., Solgaard, A. M., and Box, J. E.: Programme for Monitoring of the Greenland Ice Sheet (PROMICE) automatic weather station data, Earth Syst. Sci. Data, 13, 3819–3845, https://doi.org/10.5194/essd-13-3819-2021 , 2021. and How, P., Ahlstrøm, A.P., Andersen, S.B., Box, J.E., Citterio, M., Colgan, W.T., Fausto, R., Karlsson, N.B., Jakobsen, J., Larsen, S.H., Mankoff, K.D., Pedersen, A.Ø., Rutishauser, A., Shields, C.L., Solgaard, A.M., van As, D., Vandecrux, B., Wright, P.J., PROMICE and GC-Net automated weather station data in Greenland, https://doi.org/10.22008/FK2/IW73UU, GEUS Dataverse, 2022."
+    ref_gcnet = "Fausto, R. S., van As, D., Mankoff, K. D., Vandecrux, B., Citterio, M., Ahlstrøm, A. P., Andersen, S. B., Colgan, W., Karlsson, N. B., Kjeldsen, K. K., Korsgaard, N. J., Larsen, S. H., Nielsen, S., Pedersen, A. Ø., Shields, C. L., Solgaard, A. M., and Box, J. E.: Programme for Monitoring of the Greenland Ice Sheet (PROMICE) automatic weather station data, Earth Syst. Sci. Data, 13, 3819–3845, https://doi.org/10.5194/essd-13-3819-2021 , 2021. and How, P., Ahlstrøm, A.P., Andersen, S.B., Box, J.E., Citterio, M., Colgan, W.T., Fausto, R., Karlsson, N.B., Jakobsen, J., Larsen, S.H., Mankoff, K.D., Pedersen, A.Ø., Rutishauser, A., Shields, C.L., Solgaard, A.M., van As, D., Vandecrux, B., Wright, P.J., PROMICE and GC-Net automated weather station data in Greenland, https://doi.org/10.22008/FK2/IW73UU, GEUS Dataverse, 2022."
+    
+    df_info["reference_short"] = "PROMICE: Fausto et al. (2021); How et al. (2022)"
+    df_info.loc[ df_info.station_type == 'two booms', "reference_short"] = "GC-Net continuation: Fausto et al. (2021); How et al. (2022)"
+    df_info["reference"] = ref_promice
+    df_info.loc[ df_info.station_type == 'two booms', "reference"] = ref_gcnet
+    df_info = df_info.set_index('stid')
+    
+    df_all = pd.DataFrame()
+    for i, site in enumerate(df_info.index):
+        print(site)
+        df_aws = pd.read_csv(path_to_PROMICE+site+'_L4.csv')
+        df_aws['time'] = pd.to_datetime(df_aws.time, utc=True)
+
+        temp_var = ['t_i_'+str(i) for i in range(1,12) if 't_i_'+str(i) in df_aws.columns]
+        depth_var = ['depth_t_i_'+str(i) for i in range(1,12) if 'depth_t_i_'+str(i) in df_aws.columns]
+    
+        df_aws = df_aws[['time']+temp_var+depth_var]
+        df_aws['site'] = site
+        for v in temp_var + depth_var:
+            if v not in df_aws:
+                df_aws[v] = np.nan
+        df_all = pd.concat((df_all, df_aws),ignore_index=True)
+    df_save = df_all.copy()
+#%%
+    import firn_temp_lib as ftl
+    df_all = df_save.copy()
+
+    df_all["latitude"] = df_info.loc[df_all.site, "lat"].values
+    df_all["longitude"] = df_info.loc[df_all.site, "lon"].values
+    df_all["elevation"] = df_info.loc[df_all.site, "alt"].values
+    df_all["reference"] = df_info.loc[df_all.site, "reference"].values
+    df_all["reference_short"] = df_info.loc[df_all.site, "reference_short"].values
+    
+    ds_all = ftl.df_to_xarray(df_all, temp_var, depth_var)
+
+    ftl.write_netcdf(ds_all, 'Data/netcdf/PROMICE_GC-Net_GEUS_subsurface_temperatures.nc')
+
 # %% 10 m firn temp
 df_PROMICE = pd.DataFrame()
 
-for i in df_info.index:
-    site = df_info.loc[i, 'stid']
+for i, site in enumerate(df_info.index):
     # break
     #     # %%
     # plt.close('all')
@@ -122,13 +165,14 @@ for i in df_info.index:
         df_10["reference"] = "Fausto, R. S., van As, D., Mankoff, K. D., Vandecrux, B., Citterio, M., Ahlstrøm, A. P., Andersen, S. B., Colgan, W., Karlsson, N. B., Kjeldsen, K. K., Korsgaard, N. J., Larsen, S. H., Nielsen, S., Pedersen, A. Ø., Shields, C. L., Solgaard, A. M., and Box, J. E.: Programme for Monitoring of the Greenland Ice Sheet (PROMICE) automatic weather station data, Earth Syst. Sci. Data, 13, 3819–3845, https://doi.org/10.5194/essd-13-3819-2021 , 2021. and How, P., Ahlstrøm, A.P., Andersen, S.B., Box, J.E., Citterio, M., Colgan, W.T., Fausto, R., Karlsson, N.B., Jakobsen, J., Larsen, S.H., Mankoff, K.D., Pedersen, A.Ø., Rutishauser, A., Shields, C.L., Solgaard, A.M., van As, D., Vandecrux, B., Wright, P.J., PROMICE and GC-Net automated weather station data in Greenland, https://doi.org/10.22008/FK2/IW73UU, GEUS Dataverse, 2022."
         
         df_10["reference_short"] = "GC-Net continuation: Fausto et al. (2021); How et al. (2022)"
-
+        
     # filtering
     df_10.loc[df_10["temperatureObserved"] > 0.1, "temperatureObserved"] = np.nan
     df_10.loc[df_10["temperatureObserved"] < -70, "temperatureObserved"] = np.nan
     
     df_PROMICE = pd.concat((df_PROMICE, df_10.reset_index()))
 
+df_PROMICE.index = pd.to_datetime(df_PROMICE.index)
 df_PROMICE = df_PROMICE.set_index("date")
 df_PROMICE = df_PROMICE.loc[df_PROMICE.temperatureObserved.notnull(), :]
 

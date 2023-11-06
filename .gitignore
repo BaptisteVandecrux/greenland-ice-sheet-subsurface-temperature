@@ -1,3 +1,6 @@
+figures/stability*
+figures/*.tif
+figures/*.pdf
 Data
 old
 *.nc

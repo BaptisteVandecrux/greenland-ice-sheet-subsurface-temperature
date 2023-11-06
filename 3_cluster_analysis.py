@@ -89,7 +89,7 @@ matplotlib.rcParams.update({"font.size": 14})
 from matplotlib import cm
 from matplotlib import patches as mpatches
 
-# %% spatial distribution plot
+# % spatial distribution plot
 from matplotlib import gridspec
 spec = gridspec.GridSpec(ncols=1, nrows=2,
                          width_ratios=[1], wspace=0.1,
@@ -139,8 +139,8 @@ ax2.set_ylabel('Number of observations')
 ax2.set_xlabel('Year')
 ax2.grid()  
 
-fig.savefig('figures/figure1.png',dpi=300)
-fig.savefig('figures/figure1.pdf')
+fig.savefig('figures/figure1.tif', dpi=900, bbox_inches='tight')
+# fig.savefig('figures/figure1.pdf')
 
 # %% Studying clusters
 fig, ax = plt.subplots(1, 1, figsize=(6, 9))

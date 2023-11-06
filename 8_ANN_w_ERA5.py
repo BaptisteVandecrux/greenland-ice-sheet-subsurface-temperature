@@ -32,14 +32,16 @@ ice = ice.to_crs("EPSG:3413")
 ice_4326 = ice.to_crs(4326)
 gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.longitude, df.latitude), crs="EPSG:4326")
 ind_in = gpd.sjoin(gdf, ice_4326, predicate='within').index
-# ice_4326.plot()
-# gdf.loc[[i for i in gdf.index if i not in ind_in]].plot(color='r', ax=plt.gca())
+plt.figure()
+ice_4326.plot()
+gdf.loc[[i for i in gdf.index if i not in ind_in]].plot(color='r', ax=plt.gca())
 
 print(len(df)-len(ind_in), 'observations outside ice sheet mask')
 df = df.loc[ind_in, :]
 
 # temporal selection
-print(((df.date<'1949-12-31') | (df.date>'2022')).sum(),'observations outside of 1950-2023')
+print(((df.date<'1949-12-31') | (df.date>'2023')).sum(),'observations outside of 1950-2023')
+df.loc[(df.date<='1949-12-01') | (df.date>='2023'),:]
 df = df.loc[(df.date>'1949-12-01') & (df.date<'2023'),:]
 
 print(len(df), 'observations kept')
@@ -267,8 +269,8 @@ for k in range(2):
                            ncol=2,
                            bbox_to_anchor=(0.5, 1.2))
 
-fig.savefig("figures/figure2_histograms.png", dpi =300)
-fig.savefig("figures/figure2_histograms.pdf")
+fig.savefig("figures/figure2_histograms.tif", dpi =900)
+# fig.savefig("figures/figure2_histograms.pdf")
         
 
 # %% ANN functions
@@ -871,5 +873,5 @@ fig.text(0.5,  0.02,  "Year",
     ha="center", va="center", fontsize=16)
 fig.text(0.03, 0.3, "10 m subsurface temperature (°C)",
     ha="center", va="center", rotation="vertical", fontsize=16)
-fig.savefig('figures/figure3.png')
-fig.savefig('figures/figure3.pdf')
+fig.savefig('figures/figure3.tif', dpi =900)
+# fig.savefig('figures/figure3.pdf')

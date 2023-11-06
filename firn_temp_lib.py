@@ -17,7 +17,205 @@ import itertools
 # import cartopy.crs as ccrs
 from scipy.spatial import cKDTree
 
+import xarray as xr
 
+def sparse_df_to_xarray(df_all):
+    tmp = df_all.rename(columns={'date':'time',
+                                 'temperatureObserved':'temperature',
+                                 'depthOfTemperatureObservation':'depth'})
+    
+    # filling missing sites by a string version of the coordinates
+    ind_no_site=tmp.site.isnull()|(tmp.site=='nan')
+    tmp.loc[ind_no_site,'site'] = \
+        '('+ tmp.loc[ind_no_site,'latitude'].astype(str) \
+        + ', ' + tmp.loc[ind_no_site,'longitude'].astype(str)+')'
+    
+    # droping nans
+    tmp = tmp.dropna(subset=['temperature','depth'])
+    
+    # building reference LUT
+    df_ref = tmp.set_index('reference_short')[['reference']].drop_duplicates()
+    # some special cases for historical citation
+    if 'Fischer et al. (1995)' in df_ref.index:
+        df_ref.loc['Fischer et al. (1995)','reference'] = df_ref.loc['Fischer et al. (1995)','reference'].iloc[-1]
+    if 'de Quervain (1969)' in df_ref.index:
+        df_ref.loc['de Quervain (1969)','reference'] = df_ref.loc['de Quervain (1969)','reference'].iloc[0]
+    df_ref = df_ref.drop_duplicates()
+    
+    # building position LUT
+    df_pos = tmp.set_index('site')[['latitude','longitude','elevation']].drop_duplicates()
+    # handling cases where sites are reported with different (lat, lon)
+    # different (lat, lon) means different site, below define as <site>_ref_short
+    for ind in df_pos.index[df_pos.index.duplicated()]:
+        print('renaming',ind, 'to')
+        print(tmp.loc[tmp.site==ind, 'site']+'_'+tmp.loc[tmp.site==ind, 'reference_short'])
+        tmp.loc[tmp.site==ind, 'site'] = tmp.loc[tmp.site==ind, 'site'] \
+            +'_'+tmp.loc[tmp.site==ind, 'reference_short'].replace(' ','_').replace('(','').replace(')','')
+    df_pos = tmp.set_index('site')[['latitude','longitude','elevation']].drop_duplicates()
+    
+    # keeping only important variables
+    tmp = tmp.drop(columns=['latitude','longitude','elevation','reference',
+                            'method','note',  'error', 'durationOpen', 
+                            'durationMeasured'], errors='ignore')
+    
+    tmp['time'] = pd.to_datetime(tmp.time, utc=True)
+    tmp_new = pd.concat((
+        tmp.groupby(['site','time',
+                     'reference_short']).depth.apply(list).to_frame(name='depth'),
+        tmp.groupby(['site','time',
+                     'reference_short']).temperature.apply(list).to_frame(name='temperature')),
+        axis=1)
+    
+    # turning multiple measurements into levels
+    tmp_new = pd.concat((
+        pd.DataFrame(tmp_new.depth.tolist(), 
+                     index= tmp_new.index).stack(dropna=False).to_frame(name='depth'),
+        pd.DataFrame(tmp_new.temperature.tolist(), 
+                     index= tmp_new.index).stack(dropna=False).to_frame(name='temperature')),
+        axis=1)
+    
+    ds_tmp = tmp_new.to_xarray()
+    ds_tmp = ds_tmp.rename({'level_3': 'level'})
+    ds_tmp['level'] = ds_tmp.level+1
+    ds_tmp['reference'] = df_ref.reference
+    
+    for v in ['latitude','longitude','elevation']:
+        ds_tmp[v] = df_pos[v]
+        
+    ds_tmp.time.encoding['units'] = 'days since 1900-01-01'
+    ds_tmp['elevation'] = ds_tmp.elevation.astype(int)
+    ds_tmp['site'] = ds_tmp.site.astype(str)
+    ds_tmp['reference_short'] = ds_tmp.reference_short.astype(str)
+    df_meta = pd.read_csv('Data/netcdf/variable_attributes.csv').set_index('field')
+    for var in df_meta.index:
+        for col in df_meta.columns:
+            ds_tmp[var].attrs[col] = df_meta.loc[var,col]
+    ds_tmp.attrs = {'title':'Historical subsurface temperatures with depth of measurements',
+                'author':'B. Vandecrux', 'email':'bav@geus.dk', 'production_date':'2023-08-18'} 
+    return ds_tmp
+
+
+def df_to_xarray(df_gcn_all, temp_var, depth_var, title ='data compilation'):
+    print('converting to multi-depth xarray')
+    df_gcn_all = df_gcn_all.reset_index().rename(columns={'date':'time',
+                                 'temperatureObserved':'temperature',
+                                 'depthOfTemperatureObservation':'depth'})
+    # checking the time variable is no less than hourly
+    dif_time = df_gcn_all.time.diff()
+    if len(dif_time[dif_time<pd.Timedelta(minutes=50)])>0:
+        print('found time steps under 1 h')
+        print(df_gcn_all.time[dif_time<pd.Timedelta(minutes=50)])
+    df_gcn_all.time = df_gcn_all.time.dt.round('H')
+    
+
+    df_gcn_all = df_gcn_all.set_index(['site', 'time', 'reference_short'])
+    if df_gcn_all.index.duplicated().any():
+        print('Non unique site/timestamp/ref_short combination')
+        print(df_gcn_all.loc[df_gcn_all.index.duplicated(False),[temp_var[0],depth_var[0]]])
+        print('only keeping first occurence')
+    df_gcn_all = df_gcn_all.loc[~df_gcn_all.index.duplicated()]
+
+
+    # some filtering
+    df_gcn_all = df_gcn_all.dropna(subset=temp_var, how='all')
+    for v in temp_var:
+        df_gcn_all.loc[df_gcn_all[v] > 1, v] = np.nan
+        df_gcn_all.loc[df_gcn_all[v] < -70, v] = np.nan
+    df_gcn_all = df_gcn_all.loc[~df_gcn_all[temp_var].isnull().all(axis=1),:]
+    
+
+    df_all = pd.concat((
+        df_gcn_all[temp_var].rename(columns=dict(zip(temp_var, 
+             range(1,len(temp_var)+1)))).stack(dropna=False).to_frame(name='temperature'),
+        df_gcn_all[depth_var].rename(columns=dict(zip(depth_var, 
+             range(1,len(depth_var)+1)))).stack(dropna=False).to_frame(name='depth'),
+        ), axis=1)
+    df_all.index = df_all.index.set_names(['site','time','reference_short','level'])
+
+    df_all = df_all.reset_index()
+    df_all['time'] = (pd.to_datetime(df_all.time, utc=True) - pd.to_datetime('1900-01-01', utc=True))/ np.timedelta64(1, 'D')
+    df_all = df_all.set_index(['site','time','level','reference_short'])
+    ds_all = df_all.to_xarray()
+    
+    for v in ['latitude','longitude', 'elevation']:
+        if v not in df_gcn_all.columns:
+            print(v, 'not in dataframe')
+            continue
+        ds_all[v] = df_gcn_all[v].reset_index().drop(columns='time')\
+                .drop_duplicates(subset='site').set_index(['site'])[v]
+
+    ds_all["reference"] = df_gcn_all.reset_index().set_index('reference_short').reference.drop_duplicates()
+    
+    ds_all.time.encoding['units'] = 'days since 1900-01-01'
+    if 'elevation' in df_gcn_all.columns:
+        ds_all['elevation'] = ds_all.elevation.astype(int)
+    df_meta = pd.read_csv('Data/netcdf/variable_attributes.csv').set_index('field')
+    for var in df_meta.index:
+        for col in df_meta.columns:
+            ds_all[var].attrs[col] = df_meta.loc[var,col]
+    ds_all.attrs = {'title': title,
+                'author':'B. Vandecrux', 'email':'bav@geus.dk', 'production_date':'2023-08-23'} 
+    return ds_all
+
+
+def merge_two_xr(ds_1, ds_2):
+    if (len(ds_1.site)==1) & (len(ds_2.site)==1):
+        if ds_1.site==ds_2.site:
+            # if same site, two sources, then we merge on time
+            assert(ds_1.latitude==ds_2.latitude)
+            assert(ds_1.longitude==ds_2.longitude)
+            assert(ds_1.elevation==ds_2.elevation)
+            if  ds_1.reference_short.values==ds_2.reference_short.values:
+                print('merging single site on time')
+                return xr.concat((ds_1, ds_2), dim='time', data_vars='minimal')
+            else:
+                print('merging single site on reference')
+                return xr.concat((ds_1, ds_2), dim='reference_short', data_vars='minimal')
+        else:
+            if ds_1.reference_short==ds_2.reference_short:
+                print('same reference, merging multiple sites')
+                return xr.concat((ds_1, ds_2), dim='site', data_vars='minimal')
+            else:
+                print('different references, multiple sites')
+                return xr.merge((ds_1, ds_2))
+            # , dim=['site', 'reference_short'], data_vars='minimal')                
+    else:
+        for site in np.intersect1d(ds_1.site, ds_2.site):
+            assert(ds_1.latitude.loc[site] == ds_2.latitude.loc[site])
+            assert(ds_1.longitude.loc[site] == ds_2.longitude.loc[site])
+            assert(ds_1.elevation.loc[site] == ds_2.elevation.loc[site])
+        print('merging redundant sites under different references')
+        return xr.concat((ds_1, ds_2), 
+                               dim= 'reference_short',
+                               coords='minimal',
+                               data_vars='minimal',
+                               compat='override')
+    
+def write_netcdf(ds_in, filename):
+    ds = ds_in.copy()
+    float_encoding = {"dtype": "float32", "zlib": True,"complevel": 9}
+    int_encoding = {"dtype": "int32", "_FillValue":-999,
+                    "zlib": True,"complevel": 9}
+
+    if not np.issubdtype(ds.elevation.dtype, int):
+        ds['elevation'] = ds.elevation.astype(int)
+        
+        
+    if np.issubdtype(ds.time.dtype, np.datetime64):
+        print('switching time to days since 1900-01-01')
+        ds['time'] = (pd.to_datetime(ds.time, utc=True) - pd.to_datetime('1900-01-01', utc=True))/ np.timedelta64(1, 'D')
+        ds.time.encoding['units'] = 'days since 1900-01-01'
+    ds.to_netcdf(filename,
+                      encoding={"temperature": float_encoding|{'least_significant_digit':2},
+                            "depth": float_encoding|{'least_significant_digit':2},
+                            "level": int_encoding,
+                            "longitude": float_encoding|{'least_significant_digit':4},
+                            "latitude": float_encoding|{'least_significant_digit':4},
+                            "elevation": int_encoding,
+                            "site": {"zlib": True,"complevel": 9},
+                            })
+    
+    
 def interpolate_temperature(
     dates,
     depth_cor,

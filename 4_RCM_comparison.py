@@ -340,8 +340,8 @@ fig.text(0.5,  0.02,  "Observed 10 m subsurface temperature (°C)",
     ha="center", va="center", fontsize=16)
 fig.text(0.03, 0.5, "Simulated 10 m\nsubsurface temperature (°C)",
     ha="center", va="center", rotation="vertical", fontsize=16)
-fig.savefig("figures/figure4_model_comp.png", dpi = 300)
-fig.savefig("figures/figure4_model_comp.pdf")
+fig.savefig("figures/figure4_model_comp.tif", dpi = 900)
+# fig.savefig("figures/figure4_model_comp.pdf")
 
 # %% Plotting at selected sites
 from math import sin, cos, sqrt, atan2, radians
@@ -475,8 +475,8 @@ for i, site in enumerate(site_list.index):
 ax[0].legend(ncol=3, loc="lower right", bbox_to_anchor=(1.9, 1.2), fontsize=14)
 fig.text(0.02, 0.45, "10 m subsurface temperature (°C)",
     ha="center", va="center", rotation="vertical", fontsize=15)
-fig.savefig("figures/figure5_site_comp.png", dpi=300, bbox_inches='tight')
-fig.savefig("figures/figure5_site_comp.pdf", bbox_inches='tight')
+fig.savefig("figures/figure5_site_comp.tif", dpi=900, bbox_inches='tight')
+# fig.savefig("figures/figure5_site_comp.pdf", bbox_inches='tight')
 
 # %% Preparing input for trend analysis
 ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
@@ -785,8 +785,8 @@ for k in range(len(ds_T10m_l)):
         "%s, %i-%i, %0.1f, %0.3f"
         % (model, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1])
     )
-fig.savefig("figures/figure7_trend_maps.png", dpi=300)
-fig.savefig("figures/figure7_trend_maps.pdf")
+fig.savefig("figures/figure7_trend_maps.tif", dpi=900)
+# fig.savefig("figures/figure7_trend_maps.pdf")
 
 # %% Firn area averages analysis
 def selected_area(ds, shape, mask=0):
@@ -947,8 +947,8 @@ for i in range(4):
 fig.text(0.01, 0.5,
     "Annual 10 m subsurface temperature (°C)",
     fontsize=14,va="center",rotation="vertical")
-fig.savefig("figures/figure6_comp_ice_sheet_areas.png", dpi=300)
-fig.savefig("figures/figure6_comp_ice_sheet_areas.pdf")
+fig.savefig("figures/figure6_comp_ice_sheet_areas.tif", dpi=900)
+# fig.savefig("figures/figure6_comp_ice_sheet_areas.pdf")
 #%% Stats for other periods
 
 def table_selected_ds(tmp_in,label, mask=0):
@@ -1100,7 +1100,7 @@ for i in range(4):
     ax[i].set_xlabel("")
     ax[i].set_ylabel("")
     
-fig.savefig('figures/comparison_ANN_ERA5.png',dpi=300)
+fig.savefig('figures/comparison_ANN_ERA5.tif', dpi=900)
 
 # %% T2m vs T10m difference
 plt.close('all')
@@ -1138,7 +1138,7 @@ for i, y in enumerate(['2012']):
         ax[i, k].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
         ax[i, k].set_xlabel("")
         ax[i, k].set_ylabel("")
-fig.savefig('figures/t2m_T10m_diff.png', dpi=300)
+fig.savefig('figures/t2m_T10m_diff.tif', dpi=900)
 # %% Comparison of mean avg T10m (in EPSG:3413)
 fig, ax= plt.subplots(1,3,figsize=(18,8))
 
@@ -1171,7 +1171,7 @@ for ax in ax:
     land.plot(ax=ax, zorder=-1, color='k')
     ax.set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
     ax.set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
-fig.savefig('figures/comp_T10m_avg.png')
+fig.savefig('figures/comp_T10m_avg.tif', dpi=900)
 
 # %% Comparison of mean avg T10m (in RCM CRS)
 fig, ax= plt.subplots(1,3,figsize=(18,8))
@@ -1216,4 +1216,4 @@ for ax in ax:
     ax.axes.get_xaxis().set_ticks([])
     ax.axes.get_yaxis().set_ticks([])
     land.plot(ax=ax, zorder=-1, color='k')
-fig.savefig('figures/comp_T10m_avg_2.png')
+fig.savefig('figures/comp_T10m_avg_2.tif', dpi=900)
