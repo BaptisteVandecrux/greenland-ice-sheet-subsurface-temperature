@@ -375,6 +375,7 @@ if export_nc:
     ds_sum = ftl.merge_two_xr(ds_sum_1, ds_sum_2)
     ds_extra = ftl.merge_two_xr(ds_sum, ds_swc)
     ds_gcn_merged = ftl.merge_two_xr(ds_gcn, ds_extra)
+    ds_gcn_merged['reference'] = ds_gcn_merged.reference.astype(str)
     ftl.write_netcdf(ds_gcn_merged, 
                      'Data/netcdf/Historical_GC-Net_subsurface_temperatures.nc')
 
