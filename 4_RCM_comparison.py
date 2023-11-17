@@ -619,6 +619,15 @@ import rioxarray  # for the extension to load
 import scipy.odr
 import scipy.stats
 from scipy import optimize
+from shapely.ops import unary_union
+DSA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/DSA_MAR_4326.shp")
+LAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/LAPA_MAR_4326.shp")
+HAPA = gpd.GeoDataFrame.from_file("Data/misc/firn areas/HAPA_MAR_4326.shp")
+firn = gpd.GeoDataFrame.from_file(
+    "Data/misc/firn areas/FirnLayer2000-2017_final_4326.shp"
+)
+PA = pd.concat([LAPA, HAPA])
+PA = gpd.GeoSeries(unary_union(PA.geometry))
 
 ds_T10m = ds_ann_3413
 T10m_GrIS = ds_ann_GrIS
@@ -653,6 +662,10 @@ for i in range(3):
     ax_top[i].hexbin(X.reshape(-1), Y.reshape(-1),
         significant.data[:, :].reshape(-1),
         gridsize=(50, 50), hatch="..", alpha=0)
+    if model == 'ANN':
+        if i == 1:
+            PA.set_crs("EPSG:4326").to_crs("EPSG:3413").plot(ax=ax_top[i], color="None",edgecolor='tab:red')
+            DSA.to_crs("EPSG:3413").plot(ax=ax_top[i], color="None",edgecolor='tab:blue')
 
     year_start = max(year_ranges[i, 0], int(tmp.time.values.min()))
     year_end = min(year_ranges[i, 1] - 1, int(tmp.time.values.max()))

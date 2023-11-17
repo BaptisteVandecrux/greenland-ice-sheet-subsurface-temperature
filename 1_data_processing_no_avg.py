@@ -38,15 +38,18 @@ def interp_pandas(s, kind="quadratic"):
     s_save.plot(marker="o", linestyle="none")
     # plt.xlim(0, 60)
     return s
-
+plot = True
+if plot:
+    for f in os.listdir('figures/strings_raw/'):
+        os.remove('figures/strings_raw/'+f)
 def plot_string_dataframe(df_stack, site):
-    f=plt.figure()
+    f=plt.figure(figsize=(11,7))
     sc=plt.scatter(df_stack.date,
                 -df_stack.depthOfTemperatureObservation,
                 12, df_stack.temperatureObserved)
     plt.title(site)
     plt.colorbar(sc)
-    f.savefig('figures/strings_raw/'+df_stack["reference_short"].iloc[0].replace(' ','_').replace('.','')+'_'+site+'.png')
+    f.savefig('figures/strings_raw/'+df_stack["reference_short"].iloc[0].replace(' ','_').replace('.','').replace('(','').replace(')','')+'_'+site+'.png')
     
 
 needed_cols = ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
@@ -344,8 +347,9 @@ df_promice=df_promice.loc[df_promice.temperature.notnull(),:]
 df_promice = df_promice.rename(columns={'temperature': 'temperatureObserved',
                                         'depth': 'depthOfTemperatureObservation',
                                         'time':'date'})
-# for site in df_promice.site.unique():
-#     plot_string_dataframe(df_promice.loc[df_promice.site==site], site)
+if plot:
+    for site in df_promice.site.unique():
+        plot_string_dataframe(df_promice.loc[df_promice.site==site], site)
 df_all = pd.concat((df_all, df_promice[needed_cols]), ignore_index=True)
 
 # %% GC-Net
@@ -365,8 +369,9 @@ df_GCN["reference_short"] = "PROMICE and GC-Net (GEUS)"
 df_GCN = df_GCN.rename(columns={'temperature': 'temperatureObserved',
                                         'depth': 'depthOfTemperatureObservation',
                                         'time':'date'})
-# for site in df_GCN.site.unique():
-#     plot_string_dataframe(df_GCN.loc[df_GCN.site==site], site)
+if plot:
+    for site in df_GCN.site.unique():
+        plot_string_dataframe(df_GCN.loc[df_GCN.site==site], site)
 
 df_all = pd.concat((df_all, df_GCN[needed_cols]), ignore_index=True)
 
@@ -483,7 +488,8 @@ for k, site in enumerate(["FA_13", "FA_15_1", "FA_15_2"]):
     df_miege["durationMeasured"] = np.nan
     df_miege["error"] = 0.07
     
-    # plot_string_dataframe(df_miege, site)
+    if plot:
+        plot_string_dataframe(df_miege, site)
 
     df_all = pd.concat((df_all, 
         df_miege[needed_cols],
@@ -583,7 +589,8 @@ for site in sites:
     df_stack["durationMeasured"] = 24
     df_stack["error"] = 0.5
     
-    # plot_string_dataframe(df_stack, site)
+    if plot:
+        plot_string_dataframe(df_stack, site)
 
     df_all = pd.concat((df_all, 
         df_stack[needed_cols],
@@ -623,7 +630,8 @@ for k, note in enumerate(["SPLAZ_main", "SPLAZ_2", "SPLAZ_3"]):
     df["durationMeasured"] = 1
     df["error"] = 0.2
     
-    # plot_string_dataframe(df, 'KAN_U_'+note)
+    if plot:
+        plot_string_dataframe(df, 'KAN_U_'+note)
     
     df_all = pd.concat((df_all,  df[needed_cols]), ignore_index=True)
 
@@ -722,7 +730,8 @@ for site in df.site:
     df_stack["durationMeasured"] = 1
     df_stack["error"] = 0.5
     
-    # plot_string_dataframe(df_stack, site)
+    if plot:
+        plot_string_dataframe(df_stack, site)
     
     df_all = pd.concat((df_all,  df_stack[needed_cols]), ignore_index=True)
 
@@ -805,7 +814,8 @@ for site in df_meta.site[:-1]:
     df_stack["durationMeasured"] = 1
     df_stack["error"] = 0.0625
     
-    # plot_string_dataframe(df_stack, site)
+    if plot:
+        plot_string_dataframe(df_stack, site)
     
     df_all = pd.concat((df_all, 
         df_stack[needed_cols],
@@ -898,7 +908,8 @@ df_stack["durationOpen"] = 0
 df_stack["durationMeasured"] = 1
 df_stack["error"] = 0.25
 
-# plot_string_dataframe(df_stack, 'KAN_U_Heilig')
+if plot:
+    plot_string_dataframe(df_stack, 'KAN_U_Heilig')
 df_all = pd.concat((df_all,  df_stack[needed_cols]), ignore_index=True)
 
 # %% Camp Century Climate
@@ -970,7 +981,8 @@ df_stack["durationOpen"] = 0
 df_stack["durationMeasured"] =24
 df_stack["error"] = 0.2
 
-# plot_string_dataframe(df_stack, site)
+if plot:
+    plot_string_dataframe(df_stack, site)
     
 df_all = pd.concat((df_all,  df_stack[needed_cols] ), ignore_index=True )
 
@@ -1018,7 +1030,8 @@ df_stack["durationOpen"] = 0
 df_stack["durationMeasured"] = 30 * 24
 df_stack["error"] = 0.2
 
-# plot_string_dataframe(df_stack, site)
+if plot:
+    plot_string_dataframe(df_stack, site)
     
 df_all = pd.concat((df_all,  df_stack[needed_cols] ), ignore_index=True )
 
@@ -1310,7 +1323,8 @@ for site, filename in zip(sites, filenames):
     df_stack["durationMeasured"] = 24
     df_stack["error"] = 0.1
     
-    # plot_string_dataframe(df_stack, site)
+    if plot:
+        plot_string_dataframe(df_stack, site)
         
     df_all = pd.concat((df_all,  df_stack[needed_cols] ), ignore_index=True )
 
@@ -1403,7 +1417,8 @@ df_stack["durationOpen"] = 0
 df_stack["durationMeasured"] = 24 * 30
 df_stack["error"] = 0.5
 
-# plot_string_dataframe(df_stack, site)
+if plot:
+    plot_string_dataframe(df_stack, site)
     
 df_all = pd.concat((df_all,  df_stack[needed_cols] ), ignore_index=True )
 
@@ -1479,7 +1494,8 @@ for i, site in enumerate(["s5", "s6", "s9"]):
     df_stack["durationMeasured"] = 24 * 30
     df_stack["error"] = 0.2
     
-    # plot_string_dataframe(df_stack, site)
+    if plot:
+        plot_string_dataframe(df_stack, site)
         
     df_all = pd.concat((df_all,  df_stack[needed_cols] ), ignore_index=True )
 
@@ -1645,7 +1661,9 @@ df["error"] = 0.2
 df_all = pd.concat((df_all, df[needed_cols]), ignore_index=True)
 
 # %% Checking values
-del df
+# del df
+df_all['temperatureObserved'] = df_all.temperatureObserved.astype(float)
+df_all['depthOfTemperatureObservation'] = df_all.depthOfTemperatureObservation.astype(float)
 df_all = df_all.loc[~df_all.temperatureObserved.isnull(), :]
 df_all = df_all.loc[~df_all.depthOfTemperatureObservation.isnull(), :]
 df_all = df_all.loc[df_all.depthOfTemperatureObservation>0, :]
@@ -1688,9 +1706,12 @@ df_all = df_all.rename(columns={'date':'timestamp',
                                 'temperatureObserved':'temperature',
                                 'depthOfTemperatureObservation': 'depth',
                                 'site':'name',
+                                'durationMeasured':'duration',
+                                'durationOpen':'open_time'
                                 })
-df_all['timestamp'] = pd.to_datetime(df_all.timestamp).dt.tz_localize(None)
+df_all['timestamp'] = pd.to_datetime(df_all.timestamp, utc = True).dt.tz_localize(None)
 
+print('start netcdf repackaging')
 df_all.index.name='measurement_id'
 
 df_names = (df_all[['name']]
@@ -1702,6 +1723,7 @@ df_names = (df_all[['name']]
 df_all['name_key'] = df_names.set_index('name').loc[df_all.name, 'name_key'].values
 ds_meta_name = df_names.set_index('name_key').to_xarray()
 
+print('    ds_meta_name created')
 df_methods = (df_all[['method']]
                 .drop_duplicates()
                 .reset_index(drop=True)
@@ -1711,25 +1733,34 @@ df_methods = (df_all[['method']]
 df_all['method_key'] = df_methods.set_index('method').loc[df_all.method, 'method_key'].values
 ds_meta_method = df_methods.set_index('method_key').to_xarray()
 
+print('    ds_meta_name created')
 
 df_references = (df_all[['reference', 'reference_short']]
-                .drop_duplicates()
+                .drop_duplicates(subset='reference')
                 .reset_index(drop=True)
                 .reset_index()
                 .rename(columns={'index':'reference_key'})
                 )
+
+# tmp = df_references.set_index('reference').loc[df_all.reference.values, 'reference_key'].values
+
 df_all['reference_key'] = df_references.set_index('reference').loc[df_all.reference.values,
                                                                    'reference_key'].values
 ds_meta_reference = df_references.set_index('reference_key').to_xarray()
-    
+print('    ds_meta_name created')
+
 ds_data = df_all.drop(columns=['name', 'method','reference','reference_short']).to_xarray()
 
 ds_meta = xr.merge((ds_meta_name,
                     ds_meta_method,
                     ds_meta_reference))
 
+print('    ds_data and ds_meta created')
+
 ds_data['elevation'] = ds_data.elevation.astype(int)
 ds_data['error'] = ('measurement_id', pd.to_numeric(ds_data['error'], errors='coerce')  )
+ds_data['duration'] = ('measurement_id', pd.to_numeric(ds_data['duration'], errors='coerce')  )
+ds_data['open_time'] = ('measurement_id', pd.to_numeric(ds_data['open_time'], errors='coerce')  )
 ds_data['note'] = ds_data['note'].astype(str)      
 ds_meta['name'] = ds_meta['name'].astype(str)      
 ds_meta['method'] = ds_meta['method'].astype(str)      
@@ -1743,20 +1774,21 @@ ds_data.attrs['production date'] = pd.Timestamp.now().strftime('%Y-%m-%d')
    
 float_encoding = {"dtype": "float32", "zlib": True,"complevel": 9}
 int_encoding = {"dtype": "int32", "_FillValue":-9999, "zlib": True,"complevel": 9}
-
+print('    variable types set')
+print('    writing to file')
 filename = 'Vandecrux_2023_temperature_compilation.nc'
+
 ds_data[['name_key', 'reference_key', 'method_key', 'timestamp',
           'latitude', 'longitude', 'elevation',  
           'temperature',  'depth', 'duration','open_time',
           'error']].to_netcdf(filename, 
                               group='DATA',
                               encoding={
-                                 "temperature": float_encoding |{'least_significant_digit':1},
-                                 "depth": float_encoding |{'least_significant_digit':1},
-                                 "timestamp": int_encoding,
+                                 "temperature": float_encoding |{'least_significant_digit':2},
+                                 "depth": float_encoding |{'least_significant_digit':2},
                                  "duration": int_encoding,
                                  "open_time": int_encoding,
-                                 "error": float_encoding|{'least_significant_digit':1},
+                                 "error": float_encoding|{'least_significant_digit':2},
                                  "longitude": float_encoding|{'least_significant_digit':6},
                                  "latitude": float_encoding|{'least_significant_digit':6},
                                  "elevation": int_encoding,
@@ -1773,3 +1805,4 @@ ds_meta.to_netcdf(filename, group='METADATA', mode='a',
                        }
                   )
     
+print('    writing completed')
