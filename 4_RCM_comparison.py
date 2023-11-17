@@ -662,11 +662,6 @@ for i in range(3):
     ax_top[i].hexbin(X.reshape(-1), Y.reshape(-1),
         significant.data[:, :].reshape(-1),
         gridsize=(50, 50), hatch="..", alpha=0)
-    if model == 'ANN':
-        if i == 1:
-            PA.set_crs("EPSG:4326").to_crs("EPSG:3413").plot(ax=ax_top[i], color="None",edgecolor='tab:red')
-            DSA.to_crs("EPSG:3413").plot(ax=ax_top[i], color="None",edgecolor='tab:blue')
-
     year_start = max(year_ranges[i, 0], int(tmp.time.values.min()))
     year_end = min(year_ranges[i, 1] - 1, int(tmp.time.values.max()))
     if i in [1, 3]:
@@ -677,14 +672,34 @@ for i in range(3):
         cb.set_label("Trend in 10 m subsurface temperature (°C decade $^{-1}$)",
             fontsize=14, rotation=270)
     ax_top[i].set_axis_off()
-    ax_top[i].set_title(
-        "("+ABC[i].lower() + ") ANN, " + str(year_start) + " to " + str(year_end),
-            fontsize=14,
-    )
+
 
     ax_top[i].set_xlim(land.bounds.minx.min(), land.bounds.maxx.max())
     ax_top[i].set_ylim(land.bounds.miny.min(), land.bounds.maxy.max())
 
+    if model == 'ANN':
+        if i == 1:
+            PA.set_crs("EPSG:4326").to_crs("EPSG:3413").plot(ax=ax_top[i], 
+                                                            color="None",
+                                                            linewidth=0.5,
+                                                            edgecolor='tab:red')
+            DSA.to_crs("EPSG:3413").plot(ax=ax_top[i], 
+                                        color="None",
+                                        linewidth=0.5,
+                                        edgecolor='tab:blue')
+            h1 = slope.isel(x=0).plot.line(ax=ax_top[i], 
+                                           c='tab:blue', 
+                                           label='limit of DSA')[0]
+            h2 = slope.isel(x=0).plot.line(ax=ax_top[i], 
+                                           c='tab:red',
+                                           label='limit of PA')[0]
+            ax_top[i].legend(handles = [h1,h2], loc='lower right', 
+                             bbox_to_anchor=(1.3,0.05), frameon=False,
+                             framealpha=0, fontsize=12)
+    ax_top[i].set_title(
+        "("+ABC[i].lower() + ") ANN, " + str(year_start) + " to " + str(year_end),
+            fontsize=14,
+    )
 # calculating trend on entire period
 X = np.array([toYearFraction(d) for d in T10m_GrIS.loc[T10m_GrIS.notnull()].index])
 y = T10m_GrIS.loc[T10m_GrIS.notnull()].values
