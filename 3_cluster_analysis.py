@@ -221,6 +221,13 @@ plt.show()
 gdf["clusters"] = labels
 # gdf.date = gdf.date.astype("datetime64[ns]")
 gdf = gdf.set_index(["clusters", "date"])
+from rasterio.crs import CRS
+
+print("loading ANN")
+ds_ann = xr.open_dataset("output/T10m_prediction.nc")
+ds_ann["time"] = pd.to_datetime(ds_ann["time"])
+crs_ann = CRS.from_string("EPSG:4326")
+ds_ann = ds_ann.rio.write_crs(crs_ann)
 # %%
 # fig, ax = plt.subplots(5, 3, figsize=(20, 20))
 # ax = ax.flatten()
@@ -270,6 +277,10 @@ for cluster_id in unique_labels:
                 tmp.loc[tmp.reference_short == ref].temperatureObserved.plot(
                     ax=ax[i], marker="o", markersize=6, linestyle="none", label=ref
                 )
+        df_ANN = ds_ann.T10m.sel(longitude=site_list.loc[site, "lon"],
+            latitude=site_list.loc[site, "lat"],
+            method="nearest").to_dataframe().resample("Y").mean()
+        df_ANN_interp = np.interp(df_select.date, df_ANN.index, df_ANN.T10m)
 
         ax[i].set_ylabel("Temperature 10 m below the surface ($^oC$)")
         ax[i].set_xlabel("")
