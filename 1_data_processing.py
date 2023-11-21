@@ -156,10 +156,7 @@ df_Ken = pd.read_excel(
 )
 
 df_Ken['reference_short'] = df_Ken.reference_short+' as in Mankoff et al. (2022)'
-df_all = pd.concat((df_all, 
-    df_Ken[needed_cols],
-    ), ignore_index=True,
-)
+df_all = pd.concat((df_all,  df_Ken[needed_cols]), ignore_index=True)
 # %% Sumup
 df_sumup = pd.read_csv("Data/Sumup/SUMup_temperature_2022.csv")
 df_sumup = df_sumup.loc[df_sumup.Latitude > 0]
@@ -662,9 +659,6 @@ df["error"] = 0.5
 
 df_all = pd.concat((df_all, df[needed_cols]), ignore_index=True)
 
-# %% saving snapshot observations to netcdf
-df_all.site=df_all.site.astype(str)
-ds_all = ftl.sparse_df_to_xarray(df_all)
 
 # %% PROMICE
 print("Loading PROMICE")
@@ -750,19 +744,9 @@ df_miege["error"] = 0.07
 temp_var = [v for v in df_miege.columns if 'temp_' in v]
 depth_var = [v for v in df_miege.columns if 'depth_' in v]
 
-ds_miege = ftl.df_to_xarray(df_miege, temp_var, depth_var)
                            
 df_all = pd.concat((df_all,  df_miege[needed_cols]), ignore_index=True)
 
-# %% 
-ds_promice = xr.open_dataset('Data/netcdf/GC-Net_PROMICE_1992_2022_subsurface_temperatures.nc')
-dif_time = ds_promice.time.diff(dim='time')/10**9/60  # in minute
-dif_time[dif_time.values.astype(float)<50]
-ds_promice['time'] = ds_promice.time.dt.round('H')
-
-ds_promice['time'] = (pd.to_datetime(ds_promice.time, utc=True) - pd.to_datetime('1900-01-01', utc=True))/ np.timedelta64(1, 'D')
-
-ds_all = xr.merge(ds_promice, ds_miege)
 # %% Harper ice temperature
 print("Loading Harper ice temperature")
 df_harper = pd.read_csv("Data/Harper ice temperature/harper_iceTemperature_2015-2016.csv")
@@ -813,9 +797,6 @@ df_all = pd.concat((df_all,
     ), ignore_index=True,
 )
 
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.sparse_df_to_xarray(df_harper))
-
 # %%  FirnCover
 print("Loading FirnCover")
 
@@ -861,9 +842,6 @@ df_firncover["method"] = "Resistance Temperature Detectors + correction"
 df_firncover["durationOpen"] = 0
 df_firncover["durationMeasured"] = 30 * 24
 df_firncover["error"] = 0.5
-
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.df_to_xarray(df_firncover, temp_var, depth_var))
 
 df_all = pd.concat((df_all, 
     df_firncover[needed_cols],
@@ -920,13 +898,8 @@ df_splaz["durationMeasured"] = 30 * 24
 df_splaz["error"] = 0.2
 
 df_splaz=df_splaz.dropna(subset=temp_var, how='all')
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.df_to_xarray(df_splaz, temp_var, depth_var))
 
-df_all = pd.concat((df_all, 
-    df_splaz[needed_cols],
-    ), ignore_index=True,
-)
+df_all = pd.concat((df_all,  df_splaz[needed_cols]), ignore_index=True)
   
 
 # %% Load Humphrey data
@@ -1009,9 +982,6 @@ df_humphrey["durationOpen"] = 0
 df_humphrey["durationMeasured"] = 30 * 24
 df_humphrey["error"] = 0.5
 
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.df_to_xarray(df_humphrey, temp_label, depth_label))
-
 df_all = pd.concat((df_all, df_humphrey[needed_cols]), ignore_index=True)
 
 # %% loading Hills
@@ -1090,11 +1060,6 @@ df_hills["durationOpen"] = 0
 df_hills["durationMeasured"] = 30 * 24
 df_hills["error"] = 0.0625
 
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.df_to_xarray(df_hills, 
-                            ['temp_'+str(i) for i in range(1,33)],
-                            ['depth_'+str(i) for i in range(1,33)]))
-
 df_all = pd.concat((df_all,  df_hills[needed_cols]), ignore_index=True)
 
 # %% Achim Dye-2
@@ -1166,8 +1131,7 @@ df["durationOpen"] = 0
 df["durationMeasured"] = 30 * 24
 df["error"] = 0.25
 df=df.reset_index().rename(columns={'time':'date'})
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.df_to_xarray(df, temp_label, depth_label))
+
 df_all = pd.concat((df_all,  df[needed_cols]), ignore_index=True)
 
 
@@ -1235,8 +1199,6 @@ df["durationMeasured"] = 30 * 24
 df["error"] = 0.2
 df = df.reset_index()
 
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.df_to_xarray(df, temp_label, depth_label))
 df_all = pd.concat((df_all,  df[needed_cols]), ignore_index=True)
 
 
@@ -1274,8 +1236,6 @@ df["durationOpen"] = 0
 df["durationMeasured"] = 30 * 24
 df["error"] = 0.2
 df = df.reset_index()
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.df_to_xarray(df, temp_label, depth_label))
 
 df_all = pd.concat((df_all, df[needed_cols]), ignore_index=True)
 
@@ -1325,8 +1285,6 @@ df_echel["error"] = 0.3
 df_profiles['reference_short'] = df_echel["reference_short"].iloc[0]
 df_profiles['reference'] = df_echel["reference"].iloc[0]
 
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.sparse_df_to_xarray(df_profiles.reset_index(drop=True)))
 df_all = pd.concat((df_all, df_echel[needed_cols]), ignore_index=True)
 
 # %% Larternser EGIG
@@ -1335,8 +1293,6 @@ df_laternser = pd.read_excel("Data/Laternser 1992/Laternser94.xlsx")
 df_laternser["reference"] = "Laternser, M., 1994 Firn temperature measurements and snow pit studies on the EGIG traverse of central Greenland, 1992. Eidgenössische Technische Hochschule.  Versuchsanstalt für Wasserbau  Hydrologie und Glaziologic. (Arbeitsheft 15)."
 df_laternser["reference_short"] = "Laternser (1994)"
 
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.sparse_df_to_xarray(df_laternser))
 # interpolating the profiles that do not have 10 m depth
 tmp, ind = np.unique(
     [str(x) + str(y) for (x, y) in zip(df_laternser.site, df_laternser.date)],
@@ -1399,7 +1355,6 @@ df["elevation"] = df3.elevation.iloc[0]
 df["reference"] = df3.reference.iloc[0]
 df["reference_short"] = "Wegener (1930)"
 df["site"] = df3.name.iloc[0]
-ds_all = ftl.merge_two_xr(ds_all,ftl.sparse_df_to_xarray(df))
 
 df2 = pd.read_csv("Data/Wegener 1930/Eismitte_digitize_firntemperatures_wegener.csv", sep=";")
 date = "1930-" + df2.month.astype(str).apply(lambda x: x.zfill(2)) + "-15"
@@ -1439,8 +1394,6 @@ df_raw["longitude"] = df3.longitude.iloc[1]
 df_raw["elevation"] = df3.elevation.iloc[1]
 df_raw["reference"] = df3.reference.iloc[1].strip()
 df_raw["reference_short"] = "Sorge (1930)"
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.df_to_xarray(df_raw, temp_var, depth_var))
     
 df_all = pd.concat((df_all,  df_wegener[needed_cols] ), ignore_index=True )
 
@@ -1487,9 +1440,6 @@ meta["durationMeasured"] = "NA"
 meta["error"] = "NA"
 
 df_all = pd.concat((df_all, meta[needed_cols]), ignore_index=True)
-
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.sparse_df_to_xarray(df_all))
 
 # %% Covi
 sites = ["DYE-2", "EKT", "SiteJ"]
@@ -1559,8 +1509,6 @@ for site, filename in zip(sites, filenames):
     df["error"] = 0.1
     
     df_covi = pd.concat((df_covi,  df.reset_index()), ignore_index=True)
-ds_all = ftl.merge_two_xr(ds_all,
-                          ftl.df_to_xarray(df_covi, temp_label, depth_label))
 df_all = pd.concat((df_all,  df_covi[needed_cols]), ignore_index=True)
 
 # %% Giese & Hawley
