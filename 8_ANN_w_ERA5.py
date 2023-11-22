@@ -497,6 +497,20 @@ print('Training model on entire dataset')
 best_model, best_PredictorScalerFit, best_TargetVarScalerFit = train_ANN(
     df, Predictors, num_nodes = 64, num_layers=2, epochs=150, batch_size=4000)
 
+# %% SHAP analysis
+import shap
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(df[Predictors].values, 
+                                                    df['temperatureObserved'].values,
+                                                    test_size=0.3, random_state=42)
+explainer = shap.KernelExplainer(best_model.predict,X_train)
+
+shap_values = explainer.shap_values(X_test,nsamples=100)
+shap.summary_plot(shap_values,X_test,feature_names=Predictors)
+#%%
+shap.initjs()
+shap.force_plot(explainer.expected_value, shap_values[0,:] ,
+                X_test[0,:],feature_names=Predictors)
 # %% Predicting T10m over ERA5 dataset
 predict = 0
 
