@@ -228,7 +228,9 @@ ds_ann = xr.open_dataset("output/T10m_prediction.nc")
 ds_ann["time"] = pd.to_datetime(ds_ann["time"])
 crs_ann = CRS.from_string("EPSG:4326")
 ds_ann = ds_ann.rio.write_crs(crs_ann)
-# %%
+cluster_coord = gdf.reset_index(drop=True)[['latitude','longitude','clusters']].groupby('clusters').mean()
+cluster_coord['site'] = gdf.reset_index(drop=True)[['site','clusters']].groupby('clusters').site.apply(lambda x: list(np.unique(x)))
+# %% Plotting all clusters
 # fig, ax = plt.subplots(5, 3, figsize=(20, 20))
 # ax = ax.flatten()
 # fig.subplots_adjust(
@@ -261,6 +263,12 @@ for cluster_id in unique_labels:
         fig, ax = plt.subplots(1, 1, figsize=(8, 5))
         ax = [ax]
         i = 0
+        df_ANN = ds_ann.T10m.sel(longitude=cluster_coord.loc[cluster_id,'longitude'],
+            latitude=cluster_coord.loc[cluster_id,'latitude'],
+            method="nearest").to_dataframe()
+        df_ANN.T10m.plot(ax=ax[i],label='ANN',color='lightgray')
+        df_ANN.T10m.resample("Y").mean().plot(ax=ax[i],color='k',
+                                              label='ANN annual average')
         for ref in ref_list:
             if ref == "PROMICE":
                 tmp2 = tmp.loc[tmp.reference_short == ref,:]
@@ -277,15 +285,11 @@ for cluster_id in unique_labels:
                 tmp.loc[tmp.reference_short == ref].temperatureObserved.plot(
                     ax=ax[i], marker="o", markersize=6, linestyle="none", label=ref
                 )
-        df_ANN = ds_ann.T10m.sel(longitude=site_list.loc[site, "lon"],
-            latitude=site_list.loc[site, "lat"],
-            method="nearest").to_dataframe().resample("Y").mean()
-        df_ANN_interp = np.interp(df_select.date, df_ANN.index, df_ANN.T10m)
-
+            
         ax[i].set_ylabel("Temperature 10 m below the surface ($^oC$)")
         ax[i].set_xlabel("")
         ax[i].set_title(str(np.unique(tmp.site)))
-        ax[i].legend()
+        ax[i].legend(loc='lower center',bbox_to_anchor=(0.5,1.1))
         ax[i].set_ylim(-33, 2)
         ax[i].grid()
 
@@ -294,3 +298,59 @@ for cluster_id in unique_labels:
 
 # fig.text(0.05, 0.7, "10 m subsurface temperature ($^o$C)", ha='center', va='center', rotation='vertical',fontsize=12)
         fig.savefig("figures/clusters/"+tmp.site.unique()[-1]+".png")
+
+# %% Plotting at specific clusters
+abc = 'abcdefghijkl'
+
+fig, ax = plt.subplots(6, 2, figsize=(10, 15), sharex=True, sharey=True)
+ax = ax.flatten()
+fig.subplots_adjust(
+    hspace=0.3, wspace=0.05, top=0.88, bottom=-0.5, left=0.1, right=0.9
+)
+i = -1
+
+# cmap = cm.get_cmap('tab20', len(ref_all))    # PiYG
+# cmap.set_under('b')
+# cmap.set_over('b')
+handles = list()
+labels = list()
+
+sym= 'o d ^ v > < s x *'.split()
+site_list = ['NASA-SE','NASA-E','NASA-U','DYE-2','Swiss Camp','Summit', 'CampCentury', 'Tunu-N', 'South Dome', 'Saddle', 'Humboldt','Crawford Point 1', 'Swiss Camp']
+
+for site in site_list:
+    cluster_id = cluster_coord.index[cluster_coord.site.apply(lambda x: site in x)][0]
+    if cluster_id == -1:
+        continue
+
+    tmp = gdf.loc[cluster_id]
+    ref_list = tmp.reference_short.unique()
+    print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year),',', tmp.shape[0])
+    if len(ref_list) > 1:
+
+        i = i+1
+
+        tmp.temperatureObserved.plot(
+            ax=ax[i], marker="o",c='tab:red',
+            markersize=10, linestyle="none", #label=ref
+        )
+        df_ANN = ds_ann.T10m.sel(longitude=cluster_coord.loc[cluster_id,'longitude'],
+            latitude=cluster_coord.loc[cluster_id,'latitude'],
+            method="nearest").to_dataframe()
+        df_ANN.T10m.plot(ax=ax[i],label='ANN',
+                         color='gray',drawstyle='steps', alpha=0.7)
+        df_ANN.T10m.resample("Y").mean().plot(ax=ax[i],color='k',
+                                              label='ANN annual average',
+                                              drawstyle='steps', alpha=0.7)
+                          
+
+            
+        ax[i].set_ylabel("$T_{10m}$ ($^oC$)")
+        ax[i].set_xlabel("")
+        ax[i].set_title('('+abc[i]+') '+site)
+        if i == 0: ax[i].legend(loc='lower center',bbox_to_anchor=(1.1,1.2))
+        ax[i].set_ylim(-33, 2)
+        ax[i].set_xlim('1990', '2023')
+        ax[i].grid()
+
+        fig.savefig("figures/clusters/selected.png")
