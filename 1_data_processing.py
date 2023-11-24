@@ -391,6 +391,10 @@ df_GCN["method"] = "thermocouple"
 df_GCN["durationOpen"] = 0
 df_GCN["durationMeasured"] = 30 * 24
 df_GCN["error"] = 0.5
+msk = ((df_GCN.site=='NASA-SE') 
+       & (df_GCN.date>'1999-01-10')
+       & (df_GCN.date<'1999-05-10'))
+df_GCN.loc[msk, 'temperatureObserved' ] = np.nan
 df_all = pd.concat((df_all, df_GCN[needed_cols]), ignore_index=True)
 
 # %% Steffen 2001 table (that could not be found in the GC-Net AWS data)

@@ -498,19 +498,19 @@ best_model, best_PredictorScalerFit, best_TargetVarScalerFit = train_ANN(
     df, Predictors, num_nodes = 64, num_layers=2, epochs=150, batch_size=4000)
 
 # %% SHAP analysis
-import shap
-from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(df[Predictors].values, 
-                                                    df['temperatureObserved'].values,
-                                                    test_size=0.3, random_state=42)
-explainer = shap.KernelExplainer(best_model.predict,X_train)
+# import shap
+# from sklearn.model_selection import train_test_split
+# X_train, X_test, y_train, y_test = train_test_split(df[Predictors].values, 
+#                                                     df['temperatureObserved'].values,
+#                                                     test_size=0.3, random_state=42)
+# explainer = shap.KernelExplainer(best_model.predict,X_train)
 
-shap_values = explainer.shap_values(X_test,nsamples=100)
-shap.summary_plot(shap_values,X_test,feature_names=Predictors)
-#%%
-shap.initjs()
-shap.force_plot(explainer.expected_value, shap_values[0,:] ,
-                X_test[0,:],feature_names=Predictors)
+# shap_values = explainer.shap_values(X_test,nsamples=100)
+# shap.summary_plot(shap_values,X_test,feature_names=Predictors)
+
+# shap.initjs()
+# shap.force_plot(explainer.expected_value, shap_values[0,:] ,
+#                 X_test[0,:],feature_names=Predictors)
 # %% Predicting T10m over ERA5 dataset
 predict = 0
 
@@ -644,8 +644,8 @@ for k, site in enumerate(["CP1","DYE-2", "Summit","Camp Century",
 
 
 # %% Preparing for figure 3
-
 # averaging and reprojecting uncertainty map
+
 ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
 ice = ice.to_crs("EPSG:4326")
 ds_era = ds_era.rio.write_crs("EPSG:4326").rio.clip(ice.geometry.values, ice.crs)
@@ -691,12 +691,13 @@ df = extract_T10m_values(
     ds_T10m.to_dataset(), df, dim1="longitude", dim2="latitude", name_out="T10m_ANN"
 )
 # calculating directly from the dataset
-df.loc[df.T10m_ANN.isnull(), 'T10m_ANN'] = ANN_predict(df.loc[df.T10m_ANN.isnull(), Predictors],
-                                                       best_model, 
-                                                       best_PredictorScalerFit, 
-                                                       best_TargetVarScalerFit)
+# df.loc[df.T10m_ANN.isnull(), 'T10m_ANN'] = ANN_predict(
+#     df.loc[df.T10m_ANN.isnull(), Predictors],
+#     best_model, 
+#     best_PredictorScalerFit, 
+#     best_TargetVarScalerFit)
 
-# % Plotting Figure 2
+# % Plotting Figure 3
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
 
 # plt.close('all')
@@ -805,9 +806,7 @@ ax_map.text(0.1, 0.9, '(c)',
  transform = ax_map.transAxes)
 ax_map.set_xlim(-700000, 900000)
 ax_map.set_ylim(-3400000, -574000)
-# pos1 = ax_map.get_position()
-# pos2 = [pos1.x0, pos1.y0 + 0.1,  pos1.width, pos1.height] 
-# ax_map.set_position(pos2)
+
 import matplotlib.patheffects as pe
 
 # =============== site examples =======================
@@ -840,15 +839,19 @@ for k, site in enumerate(["NASA-E", "DYE-2", "KAN_L", 'KPC_U',"FA_13"]):
                          longitude=df_select.longitude.unique()[0]),
                     method='nearest').to_dataframe().T10m_std
 
-    best_model_pred = ANN_predict(df_select[Predictors], 
-                                  best_model, 
-                                  best_PredictorScalerFit, 
-                                  best_TargetVarScalerFit)
+    # best_model_pred = ANN_predict(df_select[Predictors], 
+    #                               best_model, 
+    #                               best_PredictorScalerFit, 
+    #                               best_TargetVarScalerFit)
+                                
+    df_interp = ds_T10m.interp(longitude=df_site.longitude.item(), 
+                          latitude=df_site.latitude.item(), method="linear").to_dataframe()['T10m']
+
+        
+    ax[k].step(df_interp.index, df_interp, color="tab:blue", where='post', label="ANN")
     
-    ax[k].step(df_select.index, best_model_pred, color="tab:blue", where='post', label="ANN")
-    
-    ax[k].fill_between(df_select.index, best_model_pred - cv_std, 
-        best_model_pred + cv_std, color="turquoise", step='post',
+    ax[k].fill_between(df_interp.index, df_interp - cv_std, 
+        df_interp + cv_std, color="turquoise", step='post',
         label="ANN uncertainty", zorder=0)
     
     for i in range(zwally.shape[0]):

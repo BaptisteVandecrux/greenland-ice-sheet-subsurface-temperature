@@ -142,7 +142,7 @@ ax2.grid()
 fig.savefig('figures/figure1.tif', dpi=900, bbox_inches='tight')
 # fig.savefig('figures/figure1.pdf')
 
-# %% Studying clusters
+# Studying clusters
 fig, ax = plt.subplots(1, 1, figsize=(6, 9))
 fig.subplots_adjust(hspace=0.0, wspace=0.0, top=1, bottom=0, left=0, right=1)
 land.plot(ax=ax, zorder=0, color="black")
@@ -196,9 +196,7 @@ for k, col in zip(unique_labels, colors):
 
     xy = coords[class_member_mask & core_samples_mask]
     ax.plot(
-        xy[:, 0],
-        xy[:, 1],
-        "o",
+        xy[:, 0], xy[:, 1], "o",
         markerfacecolor=tuple(col),
         markeredgecolor="k",
         markersize=14,
@@ -206,9 +204,7 @@ for k, col in zip(unique_labels, colors):
 
     xy = coords[class_member_mask & ~core_samples_mask]
     ax.plot(
-        xy[:, 0],
-        xy[:, 1],
-        "o",
+        xy[:, 0], xy[:, 1], "o",
         markerfacecolor=tuple(col),
         markeredgecolor="k",
         markersize=6,
@@ -228,21 +224,14 @@ ds_ann = xr.open_dataset("output/T10m_prediction.nc")
 ds_ann["time"] = pd.to_datetime(ds_ann["time"])
 crs_ann = CRS.from_string("EPSG:4326")
 ds_ann = ds_ann.rio.write_crs(crs_ann)
-cluster_coord = gdf.reset_index(drop=True)[['latitude','longitude','clusters']].groupby('clusters').mean()
-cluster_coord['site'] = gdf.reset_index(drop=True)[['site','clusters']].groupby('clusters').site.apply(lambda x: list(np.unique(x)))
-# %% Plotting all clusters
-# fig, ax = plt.subplots(5, 3, figsize=(20, 20))
-# ax = ax.flatten()
-# fig.subplots_adjust(
-#     hspace=0.6, wspace=0.2, top=0.97, bottom=0, left=0.1, right=0.9
-# )
-i = -1
+cluster_coord = gdf.reset_index()[['latitude','longitude','clusters']].groupby('clusters').mean()
+cluster_coord['site'] = gdf.reset_index()[['site','clusters']].groupby('clusters').site.apply(lambda x: list(np.unique(x)))
 
+# %% Plotting all clusters
+
+i = -1
 import matplotlib.cm as cm
 plt.close('all')
-# cmap = cm.get_cmap('tab20', len(ref_all))    # PiYG
-# cmap.set_under('b')
-# cmap.set_over('b')
 handles = list()
 labels = list()
 import matplotlib.dates as mdates
@@ -255,11 +244,7 @@ for cluster_id in unique_labels:
     ref_list = tmp.reference_short.unique()
     print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year),',', tmp.shape[0])
     if len(ref_list) > 1:
-        # if np.nanmax(tmp.year)-np.nanmin(tmp.year) < 5:
-        #     continue
-        
 
-        # i = i+1
         fig, ax = plt.subplots(1, 1, figsize=(8, 5))
         ax = [ax]
         i = 0
@@ -293,64 +278,91 @@ for cluster_id in unique_labels:
         ax[i].set_ylim(-33, 2)
         ax[i].grid()
 
-    # if i not in [12, 13, 14]:
-    #     ax[i].set_xticklabels('')
-
-# fig.text(0.05, 0.7, "10 m subsurface temperature ($^o$C)", ha='center', va='center', rotation='vertical',fontsize=12)
         fig.savefig("figures/clusters/"+tmp.site.unique()[-1]+".png")
 
+
 # %% Plotting at specific clusters
+from sklearn.linear_model import LinearRegression
+def trend(series_with_nan):
+    start_year = series_with_nan.first_valid_index().year
+    series_dropped_nan = series_with_nan.dropna()
+    
+    # Convert the datetime index to a numeric format (years since start) for the modified series
+    years_since_start_dropped_nan = series_dropped_nan.index.year - start_year
+    
+    # Prepare data for linear regression with NaN values dropped
+    X_dropped_nan = years_since_start_dropped_nan.values.reshape(-1, 1)
+    y_dropped_nan = series_dropped_nan.values
+    
+    # Perform linear regression on the modified data
+    model_dropped_nan = LinearRegression()
+    model_dropped_nan.fit(X_dropped_nan, y_dropped_nan)
+    
+    # The slope of the regression line indicates the trend
+    trend_slope_dropped_nan = model_dropped_nan.coef_[0]
+    trend_slope_dropped_nan
+    return trend_slope_dropped_nan 
+
 abc = 'abcdefghijkl'
 
-fig, ax = plt.subplots(6, 2, figsize=(10, 15), sharex=True, sharey=True)
+fig, ax = plt.subplots(5, 2, figsize=(10, 15), sharex=True, sharey=False)
 ax = ax.flatten()
 fig.subplots_adjust(
-    hspace=0.3, wspace=0.05, top=0.88, bottom=-0.5, left=0.1, right=0.9
+    hspace=0.3, wspace=0.05, top=0.88, bottom=-0.5, left=0.1, right=0.85
 )
-i = -1
 
-# cmap = cm.get_cmap('tab20', len(ref_all))    # PiYG
-# cmap.set_under('b')
-# cmap.set_over('b')
 handles = list()
 labels = list()
 
 sym= 'o d ^ v > < s x *'.split()
-site_list = ['NASA-SE','NASA-E','NASA-U','DYE-2','Swiss Camp','Summit', 'CampCentury', 'Tunu-N', 'South Dome', 'Saddle', 'Humboldt','Crawford Point 1', 'Swiss Camp']
+site_list = ['NASA-SE','NASA-E','Summit_THM', 'Tunu-N', 'South Dome', 'Saddle', 'Humboldt','Crawford Point 1','DYE-2','Swiss Camp']
 
-for site in site_list:
+for i, site in enumerate(site_list):
     cluster_id = cluster_coord.index[cluster_coord.site.apply(lambda x: site in x)][0]
-    if cluster_id == -1:
-        continue
 
-    tmp = gdf.loc[cluster_id]
+    tmp = gdf.loc[cluster_id].sort_index()
     ref_list = tmp.reference_short.unique()
-    print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year),',', tmp.shape[0])
-    if len(ref_list) > 1:
+    # print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year),',', tmp.shape[0])
+    tmp.temperatureObserved.plot(
+        ax=ax[i], marker="o",c='tab:red',
+        markersize=5, linestyle="none", label='observation'
+    )
+    df_ANN = ds_ann.T10m.sel(longitude=cluster_coord.loc[cluster_id,'longitude'],
+        latitude=cluster_coord.loc[cluster_id,'latitude'],
+        method="nearest").to_dataframe().resample('Y').mean()
+    df_ANN.T10m.plot(ax=ax[i],label='ANN annual values',
+                     color='gray',drawstyle='steps', alpha=0.7)
+    df_ANN_site = df_ANN.T10m.copy()  #.resample("Y").mean()
 
-        i = i+1
+    msk = np.isin(df_ANN_site.index.year, tmp.index.year)
+    df_ANN_site.loc[~msk] = np.nan
+    df_ANN_site.plot(ax=ax[i],color='k', 
+     label='years when observations are available',
+                     drawstyle='steps', alpha=0.7, lw=3)  
+    try:
+        print('%s, %0.2f, %0.2f, %0.2f, %0.2f'%(site.replace('_THM',''),
+              trend(df_ANN_site.loc['1998':'2010']),
+              trend(tmp.temperatureObserved.loc['1998':'2010']),
+                    trend(df_ANN_site.loc['1998':'2022']),
+                    trend(tmp.temperatureObserved.loc['1998':'2022'])))
+    except:
+        print('%s, nan, nan, %0.2f, %0.2f'%(site.replace('_THM',''),
+                    trend(df_ANN_site.loc['1998':'2022']),
+                    trend(tmp.temperatureObserved.loc['1998':'2022'])))
+        pass
+    
+        
+    ax[i].set_ylabel("$T_{10m}$ ($^oC$)")
+    ax[i].set_xlabel("")
+    ax[i].set_title('('+abc[i]+') '+site.replace('_THM',''))
+    if i == 0: ax[i].legend(loc='lower center',bbox_to_anchor=(1.1,1.2))
+    ax[i].set_yticks(np.arange(-30,0,5))
+    ax[i].set_ylim(df_ANN.T10m.resample("Y").mean().mean()-5,
+                   df_ANN.T10m.resample("Y").mean().mean()+5)
+    if i%2==1:
+        ax[i].yaxis.set_label_position("right")
+        ax[i].yaxis.tick_right()
+    ax[i].set_xlim('1990', '2023')
+    ax[i].grid()
 
-        tmp.temperatureObserved.plot(
-            ax=ax[i], marker="o",c='tab:red',
-            markersize=10, linestyle="none", #label=ref
-        )
-        df_ANN = ds_ann.T10m.sel(longitude=cluster_coord.loc[cluster_id,'longitude'],
-            latitude=cluster_coord.loc[cluster_id,'latitude'],
-            method="nearest").to_dataframe()
-        df_ANN.T10m.plot(ax=ax[i],label='ANN',
-                         color='gray',drawstyle='steps', alpha=0.7)
-        df_ANN.T10m.resample("Y").mean().plot(ax=ax[i],color='k',
-                                              label='ANN annual average',
-                                              drawstyle='steps', alpha=0.7)
-                          
-
-            
-        ax[i].set_ylabel("$T_{10m}$ ($^oC$)")
-        ax[i].set_xlabel("")
-        ax[i].set_title('('+abc[i]+') '+site)
-        if i == 0: ax[i].legend(loc='lower center',bbox_to_anchor=(1.1,1.2))
-        ax[i].set_ylim(-33, 2)
-        ax[i].set_xlim('1990', '2023')
-        ax[i].grid()
-
-        fig.savefig("figures/clusters/selected.png")
+fig.savefig("figures/clusters/selected.png")
