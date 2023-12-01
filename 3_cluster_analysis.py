@@ -101,7 +101,7 @@ box = ax1.get_position()
 box.x0 = box.x0 - 0.2
 box.x1 = box.x1 - 0.2
 ax1.set_position(box)
-land.to_crs("EPSG:3413").plot(ax=ax1, color="k")
+land.to_crs("EPSG:3413").plot(ax=ax1, color="lightgray")
 ice.to_crs("EPSG:3413").plot(ax=ax1, color="gray")
 DSA.to_crs("EPSG:3413").plot(ax=ax1, color="tab:blue")
 # LAPA.to_crs("EPSG:3413").plot(ax=ax1, color="m")
@@ -109,7 +109,7 @@ PA.to_crs("EPSG:3413").plot(ax=ax1, color="tab:red")
 
 ax1.axis("off")
 h = [np.nan, np.nan, np.nan, np.nan, np.nan]
-h[0] = mpatches.Patch(facecolor="k", label="Land")
+h[0] = mpatches.Patch(facecolor="lightgray", label="Land")
 h[1] = mpatches.Patch(facecolor="gray", label="Bare ice area")
 h[2] = mpatches.Patch(facecolor="tab:blue", label="Dry snow area")
 # h[3] = mpatches.Patch(facecolor="m", label="Low accumulation\npercolation area")
@@ -125,7 +125,7 @@ ax1.text(0.02, 0.95, "(a)" ,
         verticalalignment="top",fontweight='bold')
 hb = ax1.hexbin(df.x_3413, df.y_3413,
     bins="log", gridsize=(20, 26), mincnt=1,
-    linewidth=0.5, edgecolors="white", cmap="magma")
+    linewidth=0.5, edgecolors="k", cmap="gnuplot2")
 cbar_ax = fig.add_axes([0.62, 0.58, 0.2, 0.01])
 cb = plt.colorbar(hb, ax=ax1, cax=cbar_ax, orientation="horizontal")
 cb.ax.get_yaxis().fontsize = 14
@@ -139,10 +139,10 @@ ax2.set_ylabel('Number of observations')
 ax2.set_xlabel('Year')
 ax2.grid()  
 
-fig.savefig('figures/figure1.tif', dpi=900, bbox_inches='tight')
-# fig.savefig('figures/figure1.pdf')
+fig.savefig('figures/figure1.tif', dpi=300, bbox_inches='tight')
+fig.savefig('figures/figure1.png', dpi=120)
 
-# Studying clusters
+# %% Studying clusters
 fig, ax = plt.subplots(1, 1, figsize=(6, 9))
 fig.subplots_adjust(hspace=0.0, wspace=0.0, top=1, bottom=0, left=0, right=1)
 land.plot(ax=ax, zorder=0, color="black")

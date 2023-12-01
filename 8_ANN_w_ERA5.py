@@ -35,12 +35,13 @@ ind_in = gpd.sjoin(gdf, ice_4326, predicate='within').index
 plt.figure()
 ice_4326.plot()
 gdf.loc[[i for i in gdf.index if i not in ind_in]].plot(color='r', ax=plt.gca())
-
+print(gdf.loc[[i for i in gdf.index if i not in ind_in]])
 print(len(df)-len(ind_in), 'observations outside ice sheet mask')
 df = df.loc[ind_in, :]
 
 # temporal selection
 print(((df.date<'1949-12-31') | (df.date>'2023')).sum(),'observations outside of 1950-2022')
+print(df.loc[((df.date<'1949-12-31') | (df.date>'2023')),:])
 df.loc[(df.date<='1949-12-01') | (df.date>='2023'),:]
 df = df.loc[(df.date>'1949-12-01') & (df.date<'2023'),:]
 
@@ -771,14 +772,10 @@ def extract_T10m_values(ds, df, dim1="x", dim2="y", name_out="out"):
     coords_uni = np.unique(df[[dim1, dim2]].values, axis=0)
     x = xr.DataArray(coords_uni[:, 0], dims="points")
     y = xr.DataArray(coords_uni[:, 1], dims="points")
-    try:
-        ds_interp = ds.interp(x=x, y=y, method="linear")
-    except:
-        ds_interp = ds.interp(longitude=x, latitude=y, method="linear")
-    try:
-        ds_interp_2 = ds.interp(x=x, y=y, method="nearest")
-    except:
-        ds_interp_2 = ds.interp(longitude=x, latitude=y, method="nearest")
+
+    ds_interp = ds.bfill(dim='latitude').interp(longitude=x, 
+                                                latitude=y, 
+                                                method="nearest")
 
     for i in (range(df.shape[0])):
         query_point = (df[dim1].values[i], df[dim2].values[i])
@@ -786,10 +783,6 @@ def extract_T10m_values(ds, df, dim1="x", dim2="y", name_out="out"):
         tmp = ds_interp.T10m.isel(points=index_point).sel(
             time=df.date.values[i], method="nearest"
         )
-        if tmp.isnull().all():
-            tmp = ds_interp_2.T10m.isel(points=index_point).sel(
-                time=df.date.values[i], method="nearest"
-            )
 
         df.iloc[i, df.columns.get_loc(name_out)] = tmp.values
     return df
@@ -799,14 +792,9 @@ df['T10m_ANN'] = np.nan
 df = extract_T10m_values(
     ds_T10m.to_dataset(), df, dim1="longitude", dim2="latitude", name_out="T10m_ANN"
 )
-# calculating directly from the dataset
-# df.loc[df.T10m_ANN.isnull(), 'T10m_ANN'] = ANN_predict(
-#     df.loc[df.T10m_ANN.isnull(), Predictors],
-#     best_model, 
-#     best_PredictorScalerFit, 
-#     best_TargetVarScalerFit)
 
-# % Plotting Figure 3
+
+# %% Plotting Figure 3
 df_10m = df.loc[df.depthOfTemperatureObservation.astype(float) == 10, :]
 
 # plt.close('all')
@@ -898,7 +886,7 @@ for ax1, model in zip( [plt.subplot(4,2,1), plt.subplot(4,2,3)],
 # =============== map =======================
 ax_map = plt.subplot(2,2,2)
 
-land.plot(color="k", ax=ax_map)
+land.plot(color="lightgray", ax=ax_map)
 
 im = ds_T10m_std_avg.where(ds_T10m_std_avg < 1000).plot(
     ax=ax_map, add_colorbar=False)
@@ -999,5 +987,5 @@ fig.text(0.5,  0.02,  "Year",
     ha="center", va="center", fontsize=16)
 fig.text(0.03, 0.3, "10 m subsurface temperature (°C)",
     ha="center", va="center", rotation="vertical", fontsize=16)
-fig.savefig('figures/figure3.tif', dpi =900)
-# fig.savefig('figures/figure3.pdf')
+fig.savefig('figures/figure3.tif', dpi =300)
+fig.savefig('figures/figure3.png', dpi=120)
