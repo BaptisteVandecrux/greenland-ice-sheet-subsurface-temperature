@@ -40,7 +40,7 @@ print(len(df)-len(ind_in), 'observations outside ice sheet mask')
 df = df.loc[ind_in, :]
 
 # temporal selection
-print(((df.date<'1949-12-31') | (df.date>'2023')).sum(),'observations outside of 1950-2023')
+print(((df.date<'1949-12-31') | (df.date>'2023')).sum(),'observations outside of 1950-2022')
 df.loc[(df.date<='1949-12-01') | (df.date>='2023'),:]
 df = df.loc[(df.date>'1949-12-01') & (df.date<'2023'),:]
 
@@ -497,20 +497,129 @@ print('Training model on entire dataset')
 best_model, best_PredictorScalerFit, best_TargetVarScalerFit = train_ANN(
     df, Predictors, num_nodes = 64, num_layers=2, epochs=150, batch_size=4000)
 
+# %% synthetic monthly output
+plt.figure()
+ax=plt.gca()
+for i in [1, 1000, 3000, 4000]:
+    df_in = df.iloc[[i], :].copy()
+    df_test = pd.DataFrame()
+    for m in range(1,13):
+        df_in.month = np.cos((m-1)/12*2*np.pi)
+        df_in['month_true'] = m
+        
+        
+        df_in['T10m'] = ANN_predict(df_in[Predictors],
+                                    best_model,
+                                    best_PredictorScalerFit,
+                                    best_TargetVarScalerFit).item()
+        
+        df_test = pd.concat((df_test, df_in), ignore_index=True)
+    label = '%0.3f °N, %0.3f °E'%tuple(df_in[['latitude','longitude']].iloc[0,:].to_list())
+    ax.plot(df_test.month_true, df_test.T10m, marker='o', ls='None', label=label)
+plt.legend()
+
+plt.figure()
+ax=plt.gca()
+df_in = df.iloc[[1000], :].copy()
+df_test = pd.DataFrame()
+for m in  [-15, -10, -5, 0, 5, 10, 15]:
+    df_in['t2m_10y_avg'] = df_in['t2m_10y_avg'] + m
+    
+    df_in['T10m'] = ANN_predict(df_in[Predictors],
+                                best_model,
+                                best_PredictorScalerFit,
+                                best_TargetVarScalerFit).item()
+    
+    df_test = pd.concat((df_test, df_in), ignore_index=True)
+ax.plot(df_test.t2m_10y_avg, df_test.T10m, marker='o', ls='None')
+plt.xlabel('t2m_10y_avg')
+plt.ylabel('T10m')
+plt.xlabel('month')
+plt.ylabel('T10m')
+
+plt.figure()
+ax=plt.gca()
+df_in = df.iloc[[1000], :].copy()
+df_test = pd.DataFrame()
+for m in  [0.2, 0.5, 1, 1.5, 2]:
+    df_in['sf_10y_avg'] = df_in['sf_10y_avg'] * m
+    
+    df_in['T10m'] = ANN_predict(df_in[Predictors],
+                                best_model,
+                                best_PredictorScalerFit,
+                                best_TargetVarScalerFit).item()
+    
+    df_test = pd.concat((df_test, df_in), ignore_index=True)
+ax.plot(df_test.sf_10y_avg, df_test.T10m, marker='o', ls='None')
+plt.xlabel('sf_10y_avg')
+plt.ylabel('T10m')
+         
+         
 # %% SHAP analysis
-# import shap
-# from sklearn.model_selection import train_test_split
-# X_train, X_test, y_train, y_test = train_test_split(df[Predictors].values, 
-#                                                     df['temperatureObserved'].values,
-#                                                     test_size=0.3, random_state=42)
-# explainer = shap.KernelExplainer(best_model.predict,X_train)
+make_shap_analysis = 0
+if make_shap_analysis:
+    import shap
+    from sklearn.model_selection import train_test_split
+    X_train, X_test, y_train, y_test = train_test_split(df[Predictors].values, 
+                                                        df['temperatureObserved'].values,
+                                                        test_size=0.1, random_state=42)
+    explainer = shap.KernelExplainer(best_model.predict, best_PredictorScalerFit.transform(X_train))
+    shap_values = explainer.shap_values(X_test, nsamples=100)
+    shap_values_scaled = shap_values[0]
+    for i in range(shap_values[0].shape[0]):
+        shap_values_scaled[i,:] = best_TargetVarScalerFit.transform(shap_values[0][i,:].reshape(-1,1)).reshape(1,-1)
+        
+    shap.summary_plot(shap_values, best_PredictorScalerFit.transform(X_train), feature_names=Predictors)
+    shap.summary_plot([shap_values_scaled], best_PredictorScalerFit.transform(X_train), feature_names=Predictors)
+    
+    
+    features = Predictors
+    groups = {
+        't2m': [f for f in features if 't2m' in f],
+        'sf': [f for f in features if 'sf' in f],
+        'month': ['month']
+    }
+    
+    from itertools import repeat, chain
+    revert_dict = lambda d: dict(chain(*[zip(val, repeat(key)) for key, val in d.items()]))
+    mapgroup = revert_dict(groups)
+    
+    def grouped_shap(shap_vals, features, groups):
+        groupmap = revert_dict(groups)
+        shap_Tdf = pd.DataFrame(shap_vals, columns=pd.Index(features, name='features')).T
+        shap_Tdf['group'] = shap_Tdf.reset_index().features.map(groupmap).values
+        shap_grouped = shap_Tdf.groupby('group').sum().T
+        return shap_grouped
+    shap_vals = np.array(shap_values)[0,:,:]
+    shap_group = grouped_shap(shap_vals, features, groups)
+    Predictors_name = [
+                        'T$_{2m}$ amp. in last year',
+                        'T$_{2m}$ 10 year average',
+                        'SF 10 year average',
+                        'SF in year Y-1',
+                        'SF in year Y-2',
+                        'SF in year Y-3',
+                        'SF in year Y-4',
+                        'SF in year Y-5',
+                        'T$_{2m}$ in year Y-1',
+                        'T$_{2m}$ in year Y-2',
+                        'T$_{2m}$ in year Y-3',
+                        'T$_{2m}$ in year Y-4',
+                        'T$_{2m}$ in year Y-5',
+                        'month',
+                        ]
+    shap.summary_plot(shap_values_scaled, best_PredictorScalerFit.transform(X_test),
+                      plot_type='violin',
+                      feature_names=Predictors_name)
+    plt.savefig('figures/SHAP_1.png')
+    
+    shap.summary_plot(shap_group.values, 
+                      plot_type='violin',
+                      feature_names=['month',
+                                     'SF-dependent inputs',
+                                     'T$_{2m}$-dependent inputs',])
+    plt.savefig('figures/SHAP_2.png')
 
-# shap_values = explainer.shap_values(X_test,nsamples=100)
-# shap.summary_plot(shap_values,X_test,feature_names=Predictors)
-
-# shap.initjs()
-# shap.force_plot(explainer.expected_value, shap_values[0,:] ,
-#                 X_test[0,:],feature_names=Predictors)
 # %% Predicting T10m over ERA5 dataset
 predict = 0
 

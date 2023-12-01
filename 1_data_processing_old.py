@@ -116,7 +116,9 @@ print("Loading Polashenski")
 df_Pol = pd.read_csv("Data/Polashenski/2013_10m_Temperatures.csv")
 df_Pol.columns = df_Pol.columns.str.replace(" ", "")
 df_Pol.date = pd.to_datetime(df_Pol.date, format="%m/%d/%y")
-df_Pol["reference"] = "Polashenski, C., Z. Courville, C. Benson, A. Wagner, J. Chen, G. Wong, R. Hawley, and D. Hall (2014), Observations of pronounced Greenland ice sheet firn warming and implications for runoff production, Geophys. Res. Lett., 41, 4238–4246, doi:10.1002/2014GL059806."
+df_Pol[
+    "reference"
+] = "Polashenski, C., Z. Courville, C. Benson, A. Wagner, J. Chen, G. Wong, R. Hawley, and D. Hall (2014), Observations of pronounced Greenland ice sheet firn warming and implications for runoff production, Geophys. Res. Lett., 41, 4238–4246, doi:10.1002/2014GL059806."
 df_Pol["reference_short"] = "Polashenski et al. (2014)"
 df_Pol["note"] = ""
 df_Pol["longitude"] = -df_Pol["longitude"]
@@ -136,9 +138,12 @@ df_all = pd.concat((df_all,
 )
 # %% Stauffer and Oeschger 1979
 print('Loading Stauffer and Oeschger measurements')
+
 df_s_o = pd.read_excel("Data/Stauffer and Oeschger 1979/Stauffer&Oeschger1979.xlsx")
 
-df_s_o["reference"] = "Stauffer B. and H. Oeschger. 1979. Temperaturprofile in bohrloechern am rande des Groenlaendischen Inlandeises. Hydrologie und Glaziologie an der ETH Zurich. Mitteilung Nr. 41."
+df_s_o[
+    "reference"
+] = "Stauffer B. and H. Oeschger. 1979. Temperaturprofile in bohrloechern am rande des Groenlaendischen Inlandeises. Hydrologie und Glaziologie an der ETH Zurich. Mitteilung Nr. 41."
 df_s_o["reference_short"] = "Stauffer and Oeschger (1979)"
 df_s_o["note"] = "site location estimated by M. Luethi"
 df_s_o["method"] = "Fenwal Thermistor UUB 31-J1"
@@ -155,31 +160,6 @@ df_Ken = pd.read_excel(
 
 df_Ken['reference_short'] = df_Ken.reference_short+' as in Mankoff et al. (2022)'
 df_all = pd.concat((df_all,  df_Ken[needed_cols]), ignore_index=True)
-
-# %% Thomsen shallow thermistor
-df = pd.read_excel("Data/Thomsen/data-formatted.xlsx")
-
-for date in df.date.unique():
-    tmp = df.loc[df.date == date]
-    if tmp.temperature.isnull().any():
-        df.loc[df.date == date, "temperature"] = interp_pandas(
-            tmp.set_index("depth").temperature
-        ).values
-
-
-df["depthOfTemperatureObservation"] = df["depth"]
-df["temperatureObserved"] = df["temperature"]
-df["note"] = "from unpublished pdf"
-df["date"] = pd.to_datetime(df.date)
-df["reference"] = "Thomsen, H. ., Olesen, O. ., Braithwaite, R. . and Bøggild, C. .: Ice drilling and mass balance at Pâkitsoq, Jakobshavn, central West Greenland, Rapp. Grønlands Geol. Undersøgelse, 152, 80–84, doi:10.34194/rapggu.v152.8160, 1991."
-df["reference_short"] = "Thomsen et al. (1991)"
-df["method"] = "thermistor"
-df["durationOpen"] = "NA"
-df["durationMeasured"] = "NA"
-df["error"] = 0.2
-df_all = pd.concat((df_all,  df[needed_cols]), ignore_index=True)
-                             
-
 # %% Sumup
 df_sumup = pd.read_csv("Data/Sumup/SUMup_temperature_2022.csv")
 df_sumup = df_sumup.loc[df_sumup.Latitude > 0]
@@ -391,10 +371,6 @@ df_GCN["method"] = "thermocouple"
 df_GCN["durationOpen"] = 0
 df_GCN["durationMeasured"] = 30 * 24
 df_GCN["error"] = 0.5
-msk = ((df_GCN.site=='NASA-SE') 
-       & (df_GCN.date>'1999-01-10')
-       & (df_GCN.date<'1999-05-10'))
-df_GCN.loc[msk, 'temperatureObserved' ] = np.nan
 df_all = pd.concat((df_all, df_GCN[needed_cols]), ignore_index=True)
 
 # %% Steffen 2001 table (that could not be found in the GC-Net AWS data)
@@ -1886,6 +1862,39 @@ df_all = pd.concat((df_all,
     ), ignore_index=True,
 )
 
+# %% Thomsen shallow thermistor
+print('Loading Thomsen shallow thermistor')
+
+# %% Thomsen shallow thermistor
+df = pd.read_excel("Data/Thomsen/data-formatted.xlsx")
+# df = df.set_index('d').interpolate(method= 'index')
+
+for date in df.date.unique():
+    tmp = df.loc[df.date == date]
+    if tmp.temperature.isnull().any():
+        df.loc[df.date == date, "temperature"] = interp_pandas(
+            tmp.set_index("depth").temperature
+        ).values
+
+
+df["depthOfTemperatureObservation"] = df["depth"]
+df["temperatureObserved"] = df["temperature"]
+df["note"] = "from unpublished pdf"
+df["date"] = pd.to_datetime(df.date)
+df[
+    "reference"
+] = "Thomsen, H. ., Olesen, O. ., Braithwaite, R. . and Bøggild, C. .: Ice drilling and mass balance at Pâkitsoq, Jakobshavn, central West Greenland, Rapp. Grønlands Geol. Undersøgelse, 152, 80–84, doi:10.34194/rapggu.v152.8160, 1991."
+df["reference_short"] = "Thomsen et al. (1991)"
+df["method"] = "thermistor"
+df["durationOpen"] = "NA"
+df["durationMeasured"] = "NA"
+df["error"] = 0.2
+df_all = pd.concat((df_all, 
+    df[needed_cols],
+    ), ignore_index=True,
+)
+                             
+
 
 # %% Checking values
 df_all = df_all.loc[~df_all.temperatureObserved.isnull(), :]
@@ -1980,7 +1989,7 @@ df_m.latitude = np.round(df_m.latitude, 5)
 df_m.longitude = np.round(df_m.longitude, 5)
 df_m.temperatureObserved = np.round(df_m.temperatureObserved, 2)
 df_m['date'] = pd.to_datetime(df_m['date'], utc=True).dt.date
-df_m = df_m.loc[pd.to_datetime(df_m.date)<pd.to_datetime('2023-01-01'),:]
+
 # import geopandas as gpd
 # ice = gpd.GeoDataFrame.from_file("Data/misc/IcePolygon_3413.shp")
 # ice = ice.to_crs("EPSG:3413").to_crs(4326)
