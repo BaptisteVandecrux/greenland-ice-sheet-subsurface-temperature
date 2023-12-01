@@ -6,7 +6,6 @@ old
 *.nc
 __pycache__
 *.xml
-output
 .pylint.d
 batch_size_epochs_grid.txt
 figures/stability test
