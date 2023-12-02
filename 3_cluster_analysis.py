@@ -320,19 +320,18 @@ site_list = ['NASA-SE','NASA-E','Summit_THM', 'Tunu-N', 'South Dome', 'Saddle', 
 for i, site in enumerate(site_list):
     cluster_id = cluster_coord.index[cluster_coord.site.apply(lambda x: site in x)][0]
 
-    tmp = gdf.loc[cluster_id].sort_index()
-    ref_list = tmp.reference_short.unique()
-    # print(cluster_id, tmp.site.unique(), np.nanmin(tmp.year), np.nanmax(tmp.year),',', tmp.shape[0])
+    tmp = gdf.loc[cluster_id].sort_index()[['temperatureObserved']].resample('M').mean()
+    
     tmp.temperatureObserved.plot(
         ax=ax[i], marker="o",c='tab:red',
         markersize=5, linestyle="none", label='observation'
     )
     df_ANN = ds_ann.T10m.sel(longitude=cluster_coord.loc[cluster_id,'longitude'],
         latitude=cluster_coord.loc[cluster_id,'latitude'],
-        method="nearest").to_dataframe().resample('Y').mean()
+        method="nearest").to_dataframe()
     df_ANN.T10m.plot(ax=ax[i],label='ANN annual values',
                      color='gray',drawstyle='steps', alpha=0.7)
-    df_ANN_site = df_ANN.T10m.copy()  #.resample("Y").mean()
+    df_ANN_site = df_ANN.T10m.copy()
 
     msk = np.isin(df_ANN_site.index.year, tmp.index.year)
     df_ANN_site.loc[~msk] = np.nan
@@ -340,15 +339,21 @@ for i, site in enumerate(site_list):
      label='years when observations are available',
                      drawstyle='steps', alpha=0.7, lw=3)  
     try:
-        print('%s, %0.2f, %0.2f, %0.2f, %0.2f'%(site.replace('_THM',''),
-              trend(df_ANN_site.loc['1998':'2010']),
-              trend(tmp.temperatureObserved.loc['1998':'2010']),
-                    trend(df_ANN_site.loc['1998':'2022']),
-                    trend(tmp.temperatureObserved.loc['1998':'2022'])))
+        print('%s, %0.1f, %0.1f, %0.1f, %i, %0.1f, %0.1f, %0.1f, %i'%(site.replace('_THM',''),
+              10*trend(df_ANN_site.loc['1998':'2010']),
+              10*trend(tmp.temperatureObserved.loc['1998':'2010']),
+              10*trend(df_ANN_site.loc['1998':'2010']) - 10*trend(tmp.temperatureObserved.loc['1998':'2010']),
+              tmp.temperatureObserved.loc['1998':'2010'].notnull().sum(),
+                    10*trend(df_ANN_site.loc['1998':'2022']),
+                    10*trend(tmp.temperatureObserved.loc['1998':'2022']),
+                    10*trend(df_ANN_site.loc['1998':'2022']) - 10*trend(tmp.temperatureObserved.loc['1998':'2022']),
+                    tmp.temperatureObserved.loc['1998':'2022'].notnull().sum()))
     except:
-        print('%s, nan, nan, %0.2f, %0.2f'%(site.replace('_THM',''),
-                    trend(df_ANN_site.loc['1998':'2022']),
-                    trend(tmp.temperatureObserved.loc['1998':'2022'])))
+        print('%s, nan, nan, %0.1f, %0.1f, %0.1f, %i'%(site.replace('_THM',''),
+                    10*trend(df_ANN_site.loc['1998':'2022']),
+                    10*trend(tmp.temperatureObserved.loc['1998':'2022']),
+                    10*trend(df_ANN_site.loc['1998':'2022']) - 10*trend(tmp.temperatureObserved.loc['1998':'2022']),
+                    tmp.temperatureObserved.loc['1998':'2022'].notnull().sum()))
         pass
     
         
