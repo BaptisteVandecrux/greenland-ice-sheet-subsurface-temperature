@@ -989,3 +989,4 @@ fig.text(0.03, 0.3, "10 m subsurface temperature (°C)",
     ha="center", va="center", rotation="vertical", fontsize=16)
 fig.savefig('figures/figure3.tif', dpi =300)
 fig.savefig('figures/figure3.png', dpi=120)
+fig.savefig('figures/figure3.pdf')

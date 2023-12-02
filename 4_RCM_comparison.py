@@ -182,6 +182,8 @@ def extract_T10m_values(ds, df, dim1="x", dim2="y", name_out="out"):
 print("extracting from RACMO")
 df = extract_T10m_values(ds_racmo, df, dim1="x", dim2="y", name_out="T10m_RACMO")
 df.T10m_RACMO = df.T10m_RACMO - 273.15
+
+# %%
 print("extracting from MAR")
 df = extract_T10m_values(ds_mar, df, dim1="x_mar", dim2="y_mar", name_out="T10m_MAR")
 print("extracting from HIRHAM")
@@ -650,7 +652,7 @@ for i in range(3):
     tmp = ds_T10m_dy.sel(time=slice(year_ranges[i][0], year_ranges[i][1]))
     _, _, slope, _, pval, _ = linregress_3D(tmp.time, tmp)
 
-    land.plot(ax=ax_top[i], zorder=0, color="black")
+    land.plot(ax=ax_top[i], zorder=0, color="gray")
     vmin = -1.5
     vmax = 1.5
 
@@ -681,17 +683,17 @@ for i in range(3):
         if i == 1:
             PA.set_crs("EPSG:4326").to_crs("EPSG:3413").plot(ax=ax_top[i], 
                                                             color="None",
-                                                            linewidth=0.5,
-                                                            edgecolor='tab:red')
+                                                            linewidth=0.8,
+                                                            edgecolor='k')
             DSA.to_crs("EPSG:3413").plot(ax=ax_top[i], 
                                         color="None",
-                                        linewidth=0.5,
-                                        edgecolor='tab:blue')
+                                        linewidth=0.8,
+                                        edgecolor='forestgreen')
             h1 = slope.isel(x=0).plot.line(ax=ax_top[i], 
-                                           c='tab:blue', 
+                                           c='forestgreen', 
                                            label='limit of DSA')[0]
             h2 = slope.isel(x=0).plot.line(ax=ax_top[i], 
-                                           c='tab:red',
+                                           c='k',
                                            label='limit of PA')[0]
             ax_top[i].legend(handles = [h1,h2], loc='lower right', 
                              bbox_to_anchor=(1.3,0.05), frameon=False,
@@ -779,7 +781,7 @@ for k in range(len(ds_T10m_l)):
     tmp = ds_T10m_dy.sel(time=slice(1980, 2016))
     _, _, slope, _, pval, _ = linregress_3D(tmp.time, tmp)
 
-    land.plot(ax=ax[k + 2], zorder=0, color="black")
+    land.plot(ax=ax[k + 2], zorder=0, color="gray")
     im = (slope * 10).plot(
         ax=ax[k + 2], vmin=vmin, vmax=vmax, cmap="coolwarm", add_colorbar=False
     )
@@ -813,7 +815,7 @@ for k in range(len(ds_T10m_l)):
         "%s, %i-%i, %0.1f, %0.3f"
         % (model, X[0], X[-1], est2.params[1] * 10, est2.pvalues[1])
     )
-fig.savefig("figures/figure7_trend_maps.tif", dpi=900)
+fig.savefig("figures/figure7_trend_maps.tif", dpi=300)
 # fig.savefig("figures/figure7_trend_maps.pdf")
 
 # %% Firn area averages analysis
