@@ -50,15 +50,14 @@ def plot_string_dataframe(df_stack, site):
     plt.title(site)
     plt.colorbar(sc)
     f.savefig('figures/strings_raw/'+df_stack["reference_short"].iloc[0].replace(' ','_').replace('.','').replace('(','').replace(')','')+'_'+site+'.png')
+    plt.show()
     
 
 needed_cols = ["date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
 
 # %% Mock and Weeks
 print("Loading Mock and Weeks")
-df_all = pd.DataFrame(
-    columns=[ "date", "site", "latitude", "longitude", "elevation", "depthOfTemperatureObservation", "temperatureObserved", "reference", "reference_short", "note", "error", "durationOpen", "durationMeasured", "method"]
-)
+df_all = pd.DataFrame(columns=needed_cols)
 
 df_MW = pd.read_excel("Data/MockandWeeks/CRREL RR- 170 digitized.xlsx")
 df_MW.loc[df_MW.Month.isnull(), "Day"] = 1

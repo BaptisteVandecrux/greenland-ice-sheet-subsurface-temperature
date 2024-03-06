@@ -133,14 +133,14 @@ cb.set_label("Number of \n$T_{10m}$ observations", fontsize=12, rotation=0)
 
 ax2 = fig.add_subplot(spec[1])
 ax2.set_title("(b)",loc='left',fontweight='bold')
-ax2.hist(df.date.dt.year.values, density=False, bins=30, alpha=0.7, edgecolor="white")
+ax2.hist(df.date.dt.year.values + df.date.dt.month.values/12, density=False, bins=np.arange(1910,2024,2.5), alpha=0.7, edgecolor="white")
 ax2.set_yscale('log')
 ax2.set_ylabel('Number of observations')
 ax2.set_xlabel('Year')
 ax2.grid()  
 
 fig.savefig('figures/figure1.tif', dpi=300, bbox_inches='tight')
-fig.savefig('figures/figure1.png', dpi=120)
+# fig.savefig('figures/figure1.png', dpi=120)
 
 # %% Studying clusters
 fig, ax = plt.subplots(1, 1, figsize=(6, 9))
@@ -305,39 +305,47 @@ def trend(series_with_nan):
 
 abc = 'abcdefghijkl'
 
-fig, ax = plt.subplots(5, 2, figsize=(10, 15), sharex=True, sharey=False)
+fig, ax = plt.subplots(2,1, figsize=(10, 10), sharex=True, sharey=False)
 ax = ax.flatten()
-fig.subplots_adjust(
-    hspace=0.3, wspace=0.05, top=0.88, bottom=-0.5, left=0.1, right=0.85
-)
+# fig.subplots_adjust(
+#     hspace=0.3, wspace=0.05, top=0.88, bottom=-0.5, left=0.1, right=0.85
+# )
 
 handles = list()
 labels = list()
 
 sym= 'o d ^ v > < s x *'.split()
-site_list = ['NASA-SE','NASA-E','Summit_THM', 'Tunu-N', 'South Dome', 'Saddle', 'Humboldt','Crawford Point 1','DYE-2','Swiss Camp']
+site_list = ['QAS_U','QAS_L'] #['NASA-SE','NASA-E','Summit_THM', 'Tunu-N', 'South Dome', 'Saddle', 'Humboldt','Crawford Point 1','DYE-2','Swiss Camp']
 
 for i, site in enumerate(site_list):
     cluster_id = cluster_coord.index[cluster_coord.site.apply(lambda x: site in x)][0]
 
     tmp = gdf.loc[cluster_id].sort_index()[['temperatureObserved']].resample('M').mean()
     
+
+    df_ANN = ds_ann.T10m.bfill(dim='latitude').sel(longitude=cluster_coord.loc[cluster_id,'longitude'],
+        latitude=cluster_coord.loc[cluster_id,'latitude'],
+        method="nearest").to_dataframe()
+    df_ANN.T10m.plot(ax=ax[i],label='ANN annual values',
+                     color='k',drawstyle='steps')
+    
+    df_ANN['T10m_pred'] =  (
+               trend(df_ANN.T10m)*(df_ANN.index.year + df_ANN.index.month/12)
+                   -trend(df_ANN.T10m)*1950.0833333333333 
+                       + df_ANN.T10m.iloc[0]
+                       )
+    df_ANN.T10m_pred.plot(ax=ax[i],label='__nolegend__',
+                     color='k')
+    df_ANN_site = df_ANN.T10m.copy()
     tmp.temperatureObserved.plot(
         ax=ax[i], marker="o",c='tab:red',
         markersize=5, linestyle="none", label='observation'
     )
-    df_ANN = ds_ann.T10m.sel(longitude=cluster_coord.loc[cluster_id,'longitude'],
-        latitude=cluster_coord.loc[cluster_id,'latitude'],
-        method="nearest").to_dataframe()
-    df_ANN.T10m.plot(ax=ax[i],label='ANN annual values',
-                     color='gray',drawstyle='steps', alpha=0.7)
-    df_ANN_site = df_ANN.T10m.copy()
-
     msk = np.isin(df_ANN_site.index.year, tmp.index.year)
     df_ANN_site.loc[~msk] = np.nan
-    df_ANN_site.plot(ax=ax[i],color='k', 
-     label='years when observations are available',
-                     drawstyle='steps', alpha=0.7, lw=3)  
+    # df_ANN_site.plot(ax=ax[i],color='k', 
+    #  label='years when observations are available',
+    #                  drawstyle='steps', alpha=0.7, lw=3)  
     try:
         print('%s, %0.1f, %0.1f, %0.1f, %i, %0.1f, %0.1f, %0.1f, %i'%(site.replace('_THM',''),
               10*trend(df_ANN_site.loc['1998':'2010']),
@@ -360,14 +368,14 @@ for i, site in enumerate(site_list):
     ax[i].set_ylabel("$T_{10m}$ ($^oC$)")
     ax[i].set_xlabel("")
     ax[i].set_title('('+abc[i]+') '+site.replace('_THM',''))
-    if i == 0: ax[i].legend(loc='lower center',bbox_to_anchor=(1.1,1.2))
-    ax[i].set_yticks(np.arange(-30,0,5))
-    ax[i].set_ylim(df_ANN.T10m.resample("Y").mean().mean()-5,
-                   df_ANN.T10m.resample("Y").mean().mean()+5)
-    if i%2==1:
-        ax[i].yaxis.set_label_position("right")
-        ax[i].yaxis.tick_right()
-    ax[i].set_xlim('1990', '2023')
+    if i == 0: ax[i].legend(loc='lower center')##,bbox_to_anchor=(1.1,1.2))
+    # ax[i].set_yticks(np.arange(-30,0,5))
+    # ax[i].set_ylim(df_ANN.T10m.resample("Y").mean().mean()-5,
+    #                df_ANN.T10m.resample("Y").mean().mean()+5)
+    # if i%2==1:
+    #     ax[i].yaxis.set_label_position("right")
+    #     ax[i].yaxis.tick_right()
+    ax[i].set_xlim('1950', '2023')
     ax[i].grid()
 
 fig.savefig("figures/clusters/selected.png")
